@@ -85,3 +85,5 @@ python3 scripts/check-localization.py
 ## 许可证
 
 源码采用 [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)，保留原作者的版权与声明。第三方字体、图标和词典按各自许可证使用；完整来源见 [ATTRIBUTION.md](ATTRIBUTION.md) 与 [NOTICE](NOTICE)。
+
+鸿蒙应用图标使用未经修改的上游官方 512 × 512 像素 [应用图标](upstream/assets/app-icon/hicolor/512x512/apps/ai.storyteller.photocraft.png)，按其 [MIT OR Apache-2.0 资源许可证](upstream/assets/app-icon/LICENSE.txt) 使用。

@@ -19,8 +19,13 @@ MIT OR Apache-2.0. Third-party assets retain their respective licenses.
 
 License texts for the embedded Inter and JetBrains Mono fonts, Lucide icons and SCOWL
 dictionary are included in [the HarmonyOS package resources](harmonyos/entry/src/main/resources/rawfile/licenses/).
-The shell icon is an original SVG included in the port source under MIT OR Apache-2.0.
+The HarmonyOS shell icon at `harmonyos/AppScope/resources/base/media/app_icon.png` is an
+unmodified copy of the official upstream [512 × 512 pixel app icon](upstream/assets/app-icon/hicolor/512x512/apps/ai.storyteller.photocraft.png).
+The artwork was created by the PhotoCraft project owner; its provenance is described in
+[the upstream icon README](upstream/assets/app-icon/README.md), and it is licensed under
+MIT OR Apache-2.0 by [the upstream icon license](upstream/assets/app-icon/LICENSE.txt).
 
 The ArtCraft name and logos in `upstream/docs/brand/` have separate
 [trademark terms](upstream/docs/brand/LICENSE-brand.txt). Those terms remain applicable to the
-upstream material. The HarmonyOS shell uses its own icon.
+upstream material. The official PhotoCraft app icon has the separate open source asset
+license cited above.

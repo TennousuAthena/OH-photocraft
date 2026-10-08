@@ -8,6 +8,11 @@ Port repository: https://github.com/TennousuAthena/OH-photocraft
 Upstream repository: https://github.com/storytold/photocraft
 Pinned upstream commit: 4337a6227a823a28728e68aed844feab62b3314d
 
+The HarmonyOS shell uses an unmodified copy of the official 512 x 512 pixel PhotoCraft
+upstream/assets/app-icon/hicolor/512x512/apps/ai.storyteller.photocraft.png as its app icon. The artwork was created by
+the PhotoCraft project owner and is licensed under MIT OR Apache-2.0; see
+upstream/assets/app-icon/README.md and upstream/assets/app-icon/LICENSE.txt.
+
 The ArtCraft name, wordmark and logos in upstream/docs/brand/ are trademarks of the ArtCraft Team. They are
 not open source and are not covered by the license above; their terms are in
 upstream/docs/brand/LICENSE-brand.txt.

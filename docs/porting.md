@@ -137,5 +137,8 @@ PhotoCraft 源码与本移植代码使用 MIT OR Apache-2.0；
 发行包应包含适用的许可证文本。
 
 `upstream/docs/brand/` 的 ArtCraft 标记有单独条款。
-修改版发行需删除或替换这些标记，当前壳采用项目自有 SVG 图标。
+修改版发行需删除或替换这些标记。当前壳采用未经修改的上游官方 512 × 512 像素
+[应用图标](../upstream/assets/app-icon/hicolor/512x512/apps/ai.storyteller.photocraft.png) 作为应用图标；
+该图标为上游项目所有者的原创作品，按其独立的
+[MIT OR Apache-2.0 资源许可证](../upstream/assets/app-icon/LICENSE.txt) 使用。
 可以用普通文字说明移植基于 PhotoCraft；上架前仍需核验最终打包资源和署名。
