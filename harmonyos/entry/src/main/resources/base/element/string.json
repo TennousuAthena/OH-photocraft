@@ -1,0 +1,984 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "PhotoCraft image editor"
+    },
+    {
+      "name": "ability_desc",
+      "value": "PhotoCraft for HarmonyOS PC"
+    },
+    {
+      "name": "permission_pasteboard",
+      "value": "Read text and images from the clipboard when you choose Paste"
+    },
+    {
+      "name": "shell_the_clipboard_contains_no_image_to_paste",
+      "value": "The clipboard contains no image to paste"
+    },
+    {
+      "name": "shell_the_clipboard_contains_no_text_to_paste",
+      "value": "The clipboard contains no text to paste"
+    },
+    {
+      "name": "shell_the_decoded_clipboard_image_exceeds_64_mib_or_has",
+      "value": "The decoded clipboard image exceeds 64 MiB or has invalid dimensions"
+    },
+    {
+      "name": "shell_the_clipboard_image_file_is_empty_or_exceeds_64",
+      "value": "The clipboard image file is empty or exceeds 64 MiB"
+    },
+    {
+      "name": "shell_invalid_clipboard_temporary_file_path",
+      "value": "Invalid clipboard temporary file path"
+    },
+    {
+      "name": "shell_the_copied_image_is_outside_the_app_sandbox",
+      "value": "The copied image is outside the app sandbox"
+    },
+    {
+      "name": "shell_the_recent_file_record_is_invalid_or_too_large",
+      "value": "The recent file record is invalid or too large. Open the file again"
+    },
+    {
+      "name": "shell_the_recent_file_records_are_invalid_or_too_numerous",
+      "value": "The recent file records are invalid or too numerous. Open the file again"
+    },
+    {
+      "name": "shell_duplicate_recent_file_source_record",
+      "value": "Duplicate recent file source record"
+    },
+    {
+      "name": "shell_the_recent_file_source_record_is_invalid_open_the",
+      "value": "The recent file source record is invalid. Open the file again"
+    },
+    {
+      "name": "shell_a_folder_source_cannot_be_used_as_a_single",
+      "value": "A folder source cannot be used as a single file source"
+    },
+    {
+      "name": "shell_the_recent_file_source_record_is_empty",
+      "value": "The recent file source record is empty"
+    },
+    {
+      "name": "shell_invalid_open_file_request",
+      "value": "Invalid open file request"
+    },
+    {
+      "name": "shell_the_recent_file_request_is_missing_its_original_source",
+      "value": "The recent file request is missing its original source"
+    },
+    {
+      "name": "shell_documents_with_notes",
+      "value": "Documents with notes|.pcraft,.psd,.psb"
+    },
+    {
+      "name": "shell_photocraft_scripts",
+      "value": "PhotoCraft scripts|.json,.jsonl,.txt"
+    },
+    {
+      "name": "shell_all_files",
+      "value": "All files|.*"
+    },
+    {
+      "name": "shell_photocraft_presets",
+      "value": "PhotoCraft presets|.pcpresets,.json"
+    },
+    {
+      "name": "shell_all_supported_images_and_projects",
+      "value": "All supported images and projects|.pcraft,.psd,.psb,.png,.apng,.jpg,.jpeg,.jpe,.jfif,.tif,.tiff,.webp,.gif,.bmp,.dib,.tga,.icb,.vda,.vst,.ico,.pnm,.pbm,.pgm,.ppm,.pam,.pfm,.qoi,.exr,.hdr,.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.pef,.orf,.rw2,.raf,.abr,.grd"
+    },
+    {
+      "name": "shell_common_images",
+      "value": "Common images|.png,.apng,.jpg,.jpeg,.jpe,.jfif,.tif,.tiff,.webp,.gif,.bmp,.dib"
+    },
+    {
+      "name": "shell_other_images",
+      "value": "Other images|.tga,.icb,.vda,.vst,.ico,.pnm,.pbm,.pgm,.ppm,.pam,.pfm,.qoi,.exr,.hdr"
+    },
+    {
+      "name": "shell_camera_raw_selected_formats",
+      "value": "Camera RAW (selected formats)|.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.pef,.orf,.rw2,.raf"
+    },
+    {
+      "name": "shell_the_file_source_record_is_unavailable_select_the_source",
+      "value": "The file source record is unavailable. Select the source file again"
+    },
+    {
+      "name": "shell_permission_to_read_the_file_source_has_expired_select",
+      "value": "Permission to read the file source has expired. Select the source file again"
+    },
+    {
+      "name": "shell_invalid_recent_file_source",
+      "value": "Invalid recent file source"
+    },
+    {
+      "name": "shell_the_save_request_is_missing_the_encoded_file_extension",
+      "value": "The save request is missing the encoded file extension"
+    },
+    {
+      "name": "shell_detail_file",
+      "value": "{0} file|.{1}"
+    },
+    {
+      "name": "shell_the_save_request_has_no_available_output_format",
+      "value": "The save request has no available output format"
+    },
+    {
+      "name": "shell_the_saved_file_extension_must_be_detail",
+      "value": "The saved file extension must be .{0}"
+    },
+    {
+      "name": "shell_invalid_recovery_record_size",
+      "value": "Invalid recovery record size"
+    },
+    {
+      "name": "shell_invalid_recovery_record_format",
+      "value": "Invalid recovery record format"
+    },
+    {
+      "name": "shell_the_recent_file_is_outside_the_app_document_storage",
+      "value": "The recent file is outside the app document storage"
+    },
+    {
+      "name": "shell_the_recent_file_storage_contains_an_invalid_directory_or",
+      "value": "The recent file storage contains an invalid directory or link"
+    },
+    {
+      "name": "shell_the_app_file_storage_directory_is_invalid_cannot_save",
+      "value": "The app file storage directory is invalid. Cannot save safely"
+    },
+    {
+      "name": "shell_invalid_app_file_storage_directory",
+      "value": "Invalid app file storage directory"
+    },
+    {
+      "name": "shell_too_many_recent_file_source_records_clear_the_history",
+      "value": "Too many recent file source records. Clear the history and open the file again"
+    },
+    {
+      "name": "shell_the_file_destination_record_was_not_fully_written",
+      "value": "The file destination record was not fully written"
+    },
+    {
+      "name": "shell_invalid_file_name",
+      "value": "Invalid file name"
+    },
+    {
+      "name": "shell_another_folder_selection_is_in_progress_complete_or_cancel",
+      "value": "Another folder selection is in progress. Complete or cancel it and try again"
+    },
+    {
+      "name": "shell_this_dialog_does_not_support_folder_output",
+      "value": "This dialog does not support folder output"
+    },
+    {
+      "name": "shell_this_device_does_not_support_authorized_folder_export",
+      "value": "This device does not support authorized folder export"
+    },
+    {
+      "name": "shell_select_one_output_folder",
+      "value": "Select one output folder"
+    },
+    {
+      "name": "shell_too_many_folder_selection_records_select_again_or_clear",
+      "value": "Too many folder selection records. Select again or clear completed tasks"
+    },
+    {
+      "name": "shell_invalid_system_generated_folder_identifier",
+      "value": "Invalid system generated folder identifier"
+    },
+    {
+      "name": "shell_could_not_create_a_unique_folder_selection_record",
+      "value": "Could not create a unique folder selection record"
+    },
+    {
+      "name": "shell_could_not_authorize_the_selected_output_folder_error_detail",
+      "value": "Could not authorize the selected output folder (error {0}). Select it again"
+    },
+    {
+      "name": "shell_could_not_select_the_output_folder_try_again",
+      "value": "Could not select the output folder. Try again"
+    },
+    {
+      "name": "shell_invalid_folder_selection_identifier_select_the_folder_again",
+      "value": "Invalid folder selection identifier. Select the folder again"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_select_the_folder_again",
+      "value": "Invalid folder selection record. Select the folder again"
+    },
+    {
+      "name": "shell_the_folder_selection_belongs_to_another_task_select_the",
+      "value": "The folder selection belongs to another task. Select the folder again"
+    },
+    {
+      "name": "shell_output_folder_permission_has_expired_select_the_folder_again",
+      "value": "Output folder permission has expired. Select the folder again"
+    },
+    {
+      "name": "shell_the_selected_output_location_is_not_a_folder_select",
+      "value": "The selected output location is not a folder. Select it again"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_path",
+      "value": "Invalid folder selection record path"
+    },
+    {
+      "name": "shell_the_folder_selection_record_exceeds_the_size_limit",
+      "value": "The folder selection record exceeds the size limit"
+    },
+    {
+      "name": "shell_the_folder_selection_record_was_not_fully_written",
+      "value": "The folder selection record was not fully written"
+    },
+    {
+      "name": "shell_the_import_directory_is_not_empty_recursive_cleanup_was",
+      "value": "The import directory is not empty. Recursive cleanup was refused"
+    },
+    {
+      "name": "shell_invalid_original_folder_source_record",
+      "value": "Invalid original folder source record"
+    },
+    {
+      "name": "shell_another_folder_import_is_in_progress",
+      "value": "Another folder import is in progress"
+    },
+    {
+      "name": "shell_invalid_folder_import_request",
+      "value": "Invalid folder import request"
+    },
+    {
+      "name": "shell_this_device_does_not_support_persistent_folder_import_permissions",
+      "value": "This device does not support persistent folder import permissions"
+    },
+    {
+      "name": "shell_select_only_one_folder_to_import",
+      "value": "Select only one folder to import"
+    },
+    {
+      "name": "shell_could_not_retain_permission_to_the_selected_folder",
+      "value": "Could not retain permission to the selected folder"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_size_limit_import_stopped",
+      "value": "The folder exceeds the size limit. Import stopped"
+    },
+    {
+      "name": "shell_folder_import_failed_check_the_permissions_or_folder_and",
+      "value": "Folder import failed. Check the permissions or folder and try again (error {0})"
+    },
+    {
+      "name": "shell_folder_import_failed_try_again",
+      "value": "Folder import failed. Try again"
+    },
+    {
+      "name": "shell_cleanup_of_the_imported_copy_is_incomplete_local_files",
+      "value": "; cleanup of the imported copy is incomplete. Local files have been retained"
+    },
+    {
+      "name": "shell_folder_copying_is_still_running_copy_cleanup_was_refused",
+      "value": "Folder copying is still running. Copy cleanup was refused"
+    },
+    {
+      "name": "shell_the_imported_copy_belongs_to_another_request_cleanup_was",
+      "value": "The imported copy belongs to another request. Cleanup was refused"
+    },
+    {
+      "name": "shell_an_imported_copy_ancestor_is_not_a_regular_directory",
+      "value": "An imported copy ancestor is not a regular directory. Cleanup was refused"
+    },
+    {
+      "name": "shell_the_imported_copy_ownership_record_is_invalid_cleanup_was",
+      "value": "The imported copy ownership record is invalid. Cleanup was refused"
+    },
+    {
+      "name": "shell_the_imported_copy_target_does_not_match_cleanup_was",
+      "value": "The imported copy target does not match. Cleanup was refused"
+    },
+    {
+      "name": "shell_the_imported_copy_root_or_manifest_is_outside_its",
+      "value": "The imported copy root or manifest is outside its directory. Cleanup was refused"
+    },
+    {
+      "name": "shell_the_folder_import_storage_directory_is_invalid_links_will",
+      "value": "The folder import storage directory is invalid. Links will not be followed"
+    },
+    {
+      "name": "shell_the_folder_manifest_or_permission_record_exceeds_the_size",
+      "value": "The folder manifest or permission record exceeds the size limit"
+    },
+    {
+      "name": "shell_the_folder_manifest_was_not_fully_written",
+      "value": "The folder manifest was not fully written"
+    },
+    {
+      "name": "shell_invalid_folder_input_request_identity",
+      "value": "Invalid folder input request identity"
+    },
+    {
+      "name": "shell_the_folder_input_queue_is_full_cancel_and_try",
+      "value": "The folder input queue is full. Cancel and try again"
+    },
+    {
+      "name": "shell_unsupported_folder_input_request",
+      "value": "Unsupported folder input request"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel",
+      "value": "Another file operation is in progress. Complete or cancel it before selecting a folder"
+    },
+    {
+      "name": "shell_could_not_cancel_folder_copying_immediately_waiting_for_the",
+      "value": "Could not cancel folder copying immediately. Waiting for the task to finish"
+    },
+    {
+      "name": "shell_invalid_folder_input_progress",
+      "value": "Invalid folder input progress"
+    },
+    {
+      "name": "shell_folder_import_failed",
+      "value": "Folder import failed"
+    },
+    {
+      "name": "shell_the_folder_input_result_does_not_match_the_request",
+      "value": "The folder input result does not match the request. The original dialog was not updated"
+    },
+    {
+      "name": "shell_import_was_canceled_but_the_local_copy_could_not",
+      "value": "Import was canceled, but the local copy could not be removed. Files have been retained. Try again later"
+    },
+    {
+      "name": "shell_the_local_imported_copy_could_not_be_removed_files",
+      "value": "The local imported copy could not be removed. Files have been retained"
+    },
+    {
+      "name": "shell_invalid_output_folder_request_identity",
+      "value": "Invalid output folder request identity"
+    },
+    {
+      "name": "shell_too_many_output_folder_requests_cancel_and_try_again",
+      "value": "Too many output folder requests. Cancel and try again"
+    },
+    {
+      "name": "shell_invalid_output_folder_request_format",
+      "value": "Invalid output folder request format"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel_91",
+      "value": "Another file operation is in progress. Complete or cancel it and try again"
+    },
+    {
+      "name": "shell_waiting_for_system_folder_selection_to_finish",
+      "value": "Waiting for system folder selection to finish"
+    },
+    {
+      "name": "shell_the_output_folder_operation_is_incomplete_select_the_folder",
+      "value": "The output folder operation is incomplete. Select the folder again and retry"
+    },
+    {
+      "name": "shell_invalid_output_folder_result_identity_select_the_folder_again",
+      "value": "Invalid output folder result identity. Select the folder again"
+    },
+    {
+      "name": "shell_folder_selection_was_canceled_but_the_local_permission_record",
+      "value": "Folder selection was canceled, but the local permission record was retained. Select the folder again and retry"
+    },
+    {
+      "name": "shell_the_folder_output_belongs_to_another_task_generate_the",
+      "value": "The folder output belongs to another task. Generate the output again"
+    },
+    {
+      "name": "shell_folder_export_canceled",
+      "value": "Folder export canceled"
+    },
+    {
+      "name": "shell_invalid_system_generated_folder_name",
+      "value": "Invalid system generated folder name"
+    },
+    {
+      "name": "shell_could_not_create_a_new_output_folder_name",
+      "value": "Could not create a new output folder name"
+    },
+    {
+      "name": "shell_the_output_folder_name_already_exists_overwriting_was_refused",
+      "value": "The output folder name already exists. Overwriting was refused"
+    },
+    {
+      "name": "shell_the_output_copy_location_needs_manual_inspection",
+      "value": "The output copy location needs manual inspection"
+    },
+    {
+      "name": "shell_select_the_output_folder_in_the_original_dialog_first",
+      "value": "Select the output folder in the original dialog first"
+    },
+    {
+      "name": "shell_the_output_folder_permission_service_is_not_ready",
+      "value": "The output folder permission service is not ready"
+    },
+    {
+      "name": "shell_could_not_authorize_the_selected_output_folder",
+      "value": "Could not authorize the selected output folder"
+    },
+    {
+      "name": "shell_the_selected_output_location_is_not_a_folder",
+      "value": "The selected output location is not a folder"
+    },
+    {
+      "name": "shell_too_many_retained_folder_output_tasks_to_inspect_resolve",
+      "value": "Too many retained folder output tasks to inspect. Resolve the retained copies first"
+    },
+    {
+      "name": "shell_the_folder_output_storage_contains_an_invalid_task_it",
+      "value": "The folder output storage contains an invalid task. It has been retained unchanged"
+    },
+    {
+      "name": "shell_an_incomplete_folder_output_record_was_found_the_local",
+      "value": "An incomplete folder output record was found. The local copy has been retained. Inspect the output folder and export again"
+    },
+    {
+      "name": "shell_invalid_folder_output_record",
+      "value": "Invalid folder output record"
+    },
+    {
+      "name": "shell_a_local_copy_of_a_completed_folder_export_was",
+      "value": "A local copy of a completed folder export was found. Waiting for the original task to confirm"
+    },
+    {
+      "name": "shell_an_incomplete_folder_output_was_found_local_output_files",
+      "value": "An incomplete folder output was found. Local output files have been retained. Inspect the output folder and export again"
+    },
+    {
+      "name": "shell_invalid_folder_output_task_ownership_record",
+      "value": "Invalid folder output task ownership record"
+    },
+    {
+      "name": "shell_the_folder_output_path_is_invalid_links_will_not",
+      "value": "The folder output path is invalid. Links will not be followed"
+    },
+    {
+      "name": "shell_the_folder_output_record_is_not_a_valid_regular",
+      "value": "The folder output record is not a valid regular file"
+    },
+    {
+      "name": "shell_the_folder_output_record_contains_links_or_special_files",
+      "value": "The folder output record contains links or special files"
+    },
+    {
+      "name": "shell_the_folder_output_record_was_not_fully_written",
+      "value": "The folder output record was not fully written"
+    },
+    {
+      "name": "shell_invalid_folder_output_request_identity",
+      "value": "Invalid folder output request identity"
+    },
+    {
+      "name": "shell_the_folder_output_queue_is_full_cancel_and_try",
+      "value": "The folder output queue is full. Cancel and try again"
+    },
+    {
+      "name": "shell_invalid_folder_output_request",
+      "value": "Invalid folder output request"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel_122",
+      "value": "Another file operation is in progress. Complete or cancel it before exporting"
+    },
+    {
+      "name": "shell_waiting_for_folder_output_to_finish_keep_the_system",
+      "value": "Waiting for folder output to finish. Keep the system file window open"
+    },
+    {
+      "name": "shell_the_folder_export_result_could_not_be_confirmed_local",
+      "value": "The folder export result could not be confirmed. Local output has been retained. Inspect the new output folder and export again"
+    },
+    {
+      "name": "shell_invalid_folder_output_receipt_local_output_has_been_retained",
+      "value": "Invalid folder output receipt. Local output has been retained. Inspect the output folder and retry"
+    },
+    {
+      "name": "shell_invalid_folder_output_progress",
+      "value": "Invalid folder output progress"
+    },
+    {
+      "name": "shell_invalid_folder_export_request_identity",
+      "value": "Invalid folder export request identity"
+    },
+    {
+      "name": "shell_invalid_folder_export_sandbox_root",
+      "value": "Invalid folder export sandbox root"
+    },
+    {
+      "name": "shell_the_folder_export_does_not_belong_to_a_unique",
+      "value": "The folder export does not belong to a unique output task of this app"
+    },
+    {
+      "name": "shell_the_folder_export_source_must_be_the_complete_output",
+      "value": "The folder export source must be the complete output tree of the task"
+    },
+    {
+      "name": "shell_another_folder_export_is_in_progress_wait_or_cancel",
+      "value": "Another folder export is in progress. Wait or cancel it and try again"
+    },
+    {
+      "name": "shell_the_folder_export_request_is_invalid_or_already_processed",
+      "value": "The folder export request is invalid or already processed. Try again with a new request"
+    },
+    {
+      "name": "shell_too_many_folder_export_requests_in_this_session_reopen",
+      "value": "Too many folder export requests in this session. Reopen the app"
+    },
+    {
+      "name": "shell_the_folder_export_contains_no_output_files",
+      "value": "The folder export contains no output files"
+    },
+    {
+      "name": "shell_could_not_generate_a_new_safe_output_folder_name",
+      "value": "Could not generate a new safe output folder name"
+    },
+    {
+      "name": "shell_could_not_process_folder_export_progress",
+      "value": "Could not process folder export progress"
+    },
+    {
+      "name": "shell_folder_export_is_incomplete_and_the_recovery_record_could",
+      "value": "Folder export is incomplete and the recovery record could not be updated. Complete local output has been retained. Inspect the output folder and retry or choose another folder"
+    },
+    {
+      "name": "shell_folder_copying_finished_but_export_completion_could_not_be",
+      "value": "Folder copying finished, but export completion could not be confirmed. Complete output has been retained. Inspect the new output folder and retry"
+    },
+    {
+      "name": "shell_folder_export_is_incomplete_and_partial_results_may_remain",
+      "value": "Folder export is incomplete and partial results may remain. Complete output has been retained. Inspect the new output folder and retry or choose another folder"
+    },
+    {
+      "name": "shell_folder_export_was_canceled_complete_output_has_been_retained",
+      "value": "Folder export was canceled. Complete output has been retained and can be exported again"
+    },
+    {
+      "name": "shell_folder_export_did_not_start_complete_output_has_been",
+      "value": "Folder export did not start. Complete output has been retained. Check permissions or output files and retry"
+    },
+    {
+      "name": "shell_invalid_original_folder_copy_identity",
+      "value": "Invalid original folder copy identity"
+    },
+    {
+      "name": "shell_invalid_original_folder_request_identity",
+      "value": "Invalid original folder request identity"
+    },
+    {
+      "name": "shell_the_original_folder_copy_contains_links_or_invalid_entries",
+      "value": "The original folder copy contains links or invalid entries"
+    },
+    {
+      "name": "shell_the_original_folder_source_ownership_record_does_not_match",
+      "value": "The original folder source ownership record does not match"
+    },
+    {
+      "name": "shell_the_original_folder_copy_does_not_match_the_source",
+      "value": "The original folder copy does not match the source manifest"
+    },
+    {
+      "name": "shell_could_not_read_the_original_folder_again_authorize_the",
+      "value": "Could not read the original folder again. Authorize the source again"
+    },
+    {
+      "name": "shell_the_source_file_in_the_original_folder_was_deleted",
+      "value": "The source file in the original folder was deleted or renamed. Select the source again"
+    },
+    {
+      "name": "shell_the_newly_read_source_file_is_invalid",
+      "value": "The newly read source file is invalid"
+    },
+    {
+      "name": "shell_the_folder_source_record_is_invalid_or_too_large",
+      "value": "The folder source record is invalid or too large"
+    },
+    {
+      "name": "shell_invalid_output_task_or_folder_selection_identifier",
+      "value": "Invalid output task or folder selection identifier"
+    },
+    {
+      "name": "shell_could_not_prepare_the_output_folder_error_detail_select",
+      "value": "Could not prepare the output folder (error {0}). Select it again and retry"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_select_the_folder_again_and",
+      "value": "Invalid folder selection record. Select the folder again and retry"
+    },
+    {
+      "name": "shell_could_not_prepare_the_output_folder_select_it_again",
+      "value": "Could not prepare the output folder. Select it again and retry"
+    },
+    {
+      "name": "shell_could_not_request_editor_closure_detail",
+      "value": "Could not request editor closure: {0}"
+    },
+    {
+      "name": "shell_system_printing_detail",
+      "value": "System printing: {0}"
+    },
+    {
+      "name": "shell_could_not_monitor_window_state_detail",
+      "value": "Could not monitor window state: {0}"
+    },
+    {
+      "name": "shell_invalid_platform_request_number",
+      "value": "Invalid platform request number"
+    },
+    {
+      "name": "shell_could_not_get_the_editor_screen_position_input_method",
+      "value": "Could not get the editor screen position. Input method suggestions cannot be positioned yet"
+    },
+    {
+      "name": "shell_could_not_handle_the_close_request_detail",
+      "value": "Could not handle the close request: {0}"
+    },
+    {
+      "name": "shell_could_not_confirm_system_print_status_check_the_system",
+      "value": "Could not confirm system print status. Check the system print window"
+    },
+    {
+      "name": "shell_a_folder_operation_is_in_progress_complete_or_cancel",
+      "value": "A folder operation is in progress. Complete or cancel it before pasting"
+    },
+    {
+      "name": "shell_the_window_service_is_not_ready",
+      "value": "The window service is not ready"
+    },
+    {
+      "name": "shell_unsupported_platform_request_detail",
+      "value": "Unsupported platform request: {0}"
+    },
+    {
+      "name": "shell_clipboard_text_exceeds_the_1_mib_platform_input_limit",
+      "value": "Clipboard text exceeds the 1 MiB platform input limit"
+    },
+    {
+      "name": "shell_the_editor_input_queue_is_busy_try_pasting_again",
+      "value": "The editor input queue is busy. Try pasting again"
+    },
+    {
+      "name": "shell_error_detail",
+      "value": "Error {0}"
+    },
+    {
+      "name": "shell_system_operation_failed_detail",
+      "value": "System operation failed: {0}"
+    },
+    {
+      "name": "shell_could_not_remove_the_clipboard_temporary_image_detail",
+      "value": "Could not remove the clipboard temporary image: {0}"
+    },
+    {
+      "name": "shell_could_not_wait_for_file_operations_to_finish_detail",
+      "value": "Could not wait for file operations to finish: {0}"
+    },
+    {
+      "name": "shell_could_not_close_the_input_method_detail",
+      "value": "Could not close the input method: {0}"
+    },
+    {
+      "name": "shell_could_not_close_photocraft_detail",
+      "value": "Could not close PhotoCraft: {0}"
+    },
+    {
+      "name": "shell_invalid_folder_input_request_format",
+      "value": "Invalid folder input request format"
+    },
+    {
+      "name": "shell_could_not_handle_the_folder_operation_detail",
+      "value": "Could not handle the folder operation: {0}"
+    },
+    {
+      "name": "shell_invalid_folder_publication_request_identity",
+      "value": "Invalid folder publication request identity"
+    },
+    {
+      "name": "shell_the_local_folder_selection_record_could_not_be_removed",
+      "value": "The local folder selection record could not be removed. It has been retained; user output files are unaffected"
+    },
+    {
+      "name": "shell_too_many_print_jobs_wait_for_existing_jobs_to",
+      "value": "Too many print jobs. Wait for existing jobs to finish"
+    },
+    {
+      "name": "shell_system_printing_is_unavailable_on_this_device",
+      "value": "System printing is unavailable on this device"
+    },
+    {
+      "name": "shell_the_print_file_must_be_a_pdf_in_the",
+      "value": "The print file must be a PDF in the app sandbox"
+    },
+    {
+      "name": "shell_the_print_pdf_file_is_unavailable",
+      "value": "The print PDF file is unavailable"
+    },
+    {
+      "name": "shell_system_print_request_failed",
+      "value": "System print request failed"
+    },
+    {
+      "name": "shell_the_save_recovery_record_was_not_fully_written",
+      "value": "The save recovery record was not fully written"
+    },
+    {
+      "name": "shell_an_incomplete_recovery_record_from_the_previous_save_was",
+      "value": "An incomplete recovery record from the previous save was found. Recovery files have been retained unchanged. "
+    },
+    {
+      "name": "shell_check_the_original_file_then_save_the_current_edits",
+      "value": "Check the original file, then save the current edits with Save As. External files will not be overwritten automatically."
+    },
+    {
+      "name": "shell_a_save_record_for_a_written_file_still_needs",
+      "value": "A save record for a written file still needs cleanup. Recovery files have been retained unchanged. Check the destination file."
+    },
+    {
+      "name": "shell_save_failed_the_original_file_was_restored_try_saving",
+      "value": "Save failed. The original file was restored. Try saving again or use Save As. Reason: {0}"
+    },
+    {
+      "name": "shell_could_not_retain_the_new_file_detail",
+      "value": "; could not retain the new file: {0}"
+    },
+    {
+      "name": "shell_save_failed_and_the_original_file_could_not_be",
+      "value": "Save failed and the original file could not be restored. The old backup and new file have been retained. "
+    },
+    {
+      "name": "shell_use_save_as_to_save_the_current_edits_then",
+      "value": "Use Save As to save the current edits, then inspect the destination file before continuing. Save reason: {0}; recovery reason: {1}"
+    },
+    {
+      "name": "shell_could_not_save_safely_the_original_file_is_unchanged",
+      "value": "Could not save safely. The original file is unchanged. Use Save As in a readable and writable location. "
+    },
+    {
+      "name": "shell_reason_detail",
+      "value": "Reason: {0}"
+    },
+    {
+      "name": "shell_cleanup_after_saving_could_not_be_confirmed_check_the",
+      "value": " Cleanup after saving could not be confirmed. Check the original file."
+    },
+    {
+      "name": "shell_the_file_was_written_but_cleanup_after_saving_could",
+      "value": "The file was written, but cleanup after saving could not be confirmed. Check the destination file. Reason: {0}"
+    },
+    {
+      "name": "shell_folder_import_canceled",
+      "value": "Folder import canceled"
+    },
+    {
+      "name": "shell_folder_import_limits_must_be_1_500_files_and",
+      "value": "Folder import limits must be 1–500 files and no more than 1 GiB"
+    },
+    {
+      "name": "shell_the_folder_contains_an_unsafe_relative_path",
+      "value": "The folder contains an unsafe relative path"
+    },
+    {
+      "name": "shell_the_import_root_must_be_a_unique_sandbox_directory",
+      "value": "The import root must be a unique sandbox directory"
+    },
+    {
+      "name": "shell_the_sandbox_root_contains_an_unsafe_path",
+      "value": "The sandbox root contains an unsafe path"
+    },
+    {
+      "name": "shell_the_folder_copy_container_is_not_a_regular_directory",
+      "value": "The folder copy container is not a regular directory"
+    },
+    {
+      "name": "shell_the_folder_provider_copy_hierarchy_does_not_match_a",
+      "value": "The folder provider copy hierarchy does not match a supported directory layout"
+    },
+    {
+      "name": "shell_the_folder_copy_is_not_a_unique_regular_source",
+      "value": "The folder copy is not a unique regular source directory. Links will not be followed"
+    },
+    {
+      "name": "shell_the_import_directory_is_not_a_regular_directory_links",
+      "value": "The import directory is not a regular directory. Links will not be followed"
+    },
+    {
+      "name": "shell_the_folder_manifest_contains_a_path_outside_its_directory",
+      "value": "The folder manifest contains a path outside its directory"
+    },
+    {
+      "name": "shell_the_folder_manifest_contains_duplicate_paths",
+      "value": "The folder manifest contains duplicate paths"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_limit_of_4096_entries",
+      "value": "The folder exceeds the limit of 4096 entries"
+    },
+    {
+      "name": "shell_the_folder_contains_links_or_special_files_and_was",
+      "value": "The folder contains links or special files and was not imported"
+    },
+    {
+      "name": "shell_invalid_folder_entry_size",
+      "value": "Invalid folder entry size"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_file_count_or_size_limit",
+      "value": "The folder exceeds the file count or size limit"
+    },
+    {
+      "name": "shell_could_not_safely_remove_an_invalid_directory_entry",
+      "value": "Could not safely remove an invalid directory entry"
+    },
+    {
+      "name": "shell_the_window_service_is_closed",
+      "value": "The window service is closed"
+    },
+    {
+      "name": "shell_the_fullscreen_request_is_missing_its_state",
+      "value": "The fullscreen request is missing its state"
+    },
+    {
+      "name": "shell_the_maximize_request_is_missing_its_state",
+      "value": "The maximize request is missing its state"
+    },
+    {
+      "name": "shell_unsupported_window_request_detail",
+      "value": "Unsupported window request: {0}"
+    },
+    {
+      "name": "shell_could_not_read_window_state_detail",
+      "value": "Could not read window state: {0}"
+    },
+    {
+      "name": "shell_index_paste_reading",
+      "value": "Reading clipboard…"
+    },
+    {
+      "name": "shell_index_paste_confirm",
+      "value": "Confirm this paste to grant clipboard access"
+    },
+    {
+      "name": "shell_index_paste_denied",
+      "value": "The system could not authorize this paste. Please try again."
+    },
+    {
+      "name": "shell_index_cancel",
+      "value": "Cancel"
+    },
+    {
+      "name": "shell_index_init_failed",
+      "value": "PhotoCraft initialization failed"
+    },
+    {
+      "name": "shell_index_request_id_invalid",
+      "value": "Invalid file request ID"
+    },
+    {
+      "name": "shell_index_file_service_not_ready",
+      "value": "File service is not ready"
+    },
+    {
+      "name": "shell_index_encode_failed",
+      "value": "Cannot encode the selected save format"
+    },
+    {
+      "name": "shell_index_request_unsupported",
+      "value": "Unsupported file request"
+    },
+    {
+      "name": "shell_index_drop_busy",
+      "value": "A file operation is in progress. Complete or cancel it before dropping files."
+    },
+    {
+      "name": "shell_index_drop_closing",
+      "value": "The app is closing. Cancel closing before dropping files."
+    },
+    {
+      "name": "shell_index_drop_cancelled",
+      "value": "File drop cancelled"
+    },
+    {
+      "name": "shell_index_drop_no_uri",
+      "value": "The dropped data contains no readable file URI"
+    },
+    {
+      "name": "shell_index_close_platform_failed",
+      "value": "Cannot close platform services: {0}"
+    },
+    {
+      "name": "shell_index_cancel_drop_failed",
+      "value": "Cannot cancel file drop: {0}"
+    },
+    {
+      "name": "shell_index_restore_bindings_failed",
+      "value": "Cannot restore file destinations: {0}"
+    },
+    {
+      "name": "shell_index_platform_init_failed",
+      "value": "Cannot initialize system services: {0}"
+    },
+    {
+      "name": "shell_index_init_detail",
+      "value": "PhotoCraft initialization failed: {0}"
+    },
+    {
+      "name": "shell_index_close_paste_failed",
+      "value": "Cannot close the paste panel: {0}"
+    },
+    {
+      "name": "shell_index_read_paste_failed",
+      "value": "Cannot read or clean up pasted content: {0}"
+    },
+    {
+      "name": "shell_index_platform_output_failed",
+      "value": "Cannot handle platform output: {0}"
+    },
+    {
+      "name": "shell_index_suspend_ime_failed",
+      "value": "Cannot suspend the input method: {0}"
+    },
+    {
+      "name": "shell_index_error_code",
+      "value": "Error {0}"
+    },
+    {
+      "name": "shell_index_read_request_failed",
+      "value": "Cannot read file request: {0}"
+    },
+    {
+      "name": "shell_index_drop_loading_failed",
+      "value": "Cannot load dropped files; UDMF status: {0}"
+    },
+    {
+      "name": "shell_index_drop_failed",
+      "value": "File drop failed: {0}"
+    },
+    {
+      "name": "shell_index_drop_partial",
+      "value": "Some files could not be opened: {0}"
+    },
+    {
+      "name": "shell_file_transaction_service_destroyed",
+      "value": "The file transaction service has been destroyed"
+    },
+    {
+      "name": "shell_file_transaction_close_canceled",
+      "value": "File transaction closure was canceled"
+    },
+    {
+      "name": "shell_paste_canceled",
+      "value": "Paste canceled"
+    },
+    {
+      "name": "shell_folder_publication_cannot_delete_files",
+      "value": "The folder publication service does not delete output files"
+    },
+    {
+      "name": "shell_folder_publication_cannot_delete_directories",
+      "value": "The folder publication service does not delete output directories"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "libphotocraft.so",
+  "version": "0.1.0",
+  "description": "PhotoCraft native XComponent bindings",
+  "types": "./index.d.ts"
+}

@@ -1,0 +1,27 @@
+[package]
+name = "photocraft-ohos"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[features]
+default = []
+device-tests = []
+
+[dependencies]
+craft-ohos-platform = { path = "../craft-ohos-platform" }
+photocraft-ui-egui = { path = "../../vendor/photocraft-ui-egui" }
+photocraft-engine = { path = "../../vendor/photocraft-engine" }
+photocraft-doc = { path = "../../upstream/crates/doc" }
+photocraft-io = { path = "../../upstream/crates/io" }
+photocraft-format = { path = "../../upstream/crates/format" }
+photocraft-codecs = { path = "../../upstream/crates/codecs" }
+photocraft-text = { path = "../../upstream/crates/text" }
+eframe = { version = "=0.36.2", default-features = false, features = ["wgpu"] }
+egui = "=0.36.2"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+blake3 = "1"

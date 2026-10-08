@@ -1,0 +1,2195 @@
+--- a/src/automate_cmds.rs
++++ b/src/automate_cmds.rs
+@@ -99,7 +99,7 @@
+ fn run_steps(s: &mut Session, steps: &[(String, Value)]) -> Vec<Value> {
+     let mut results = Vec::new();
+     for (id, params) in steps {
+-        match s.execute(id, params.clone()) {
++        match crate::source_cmds::check_synchronous(s, id).and_then(|()| s.execute(id, params.clone())) {
+             Ok(r) => results.push(json!({"command": id, "result": r})),
+             Err(e) => {
+                 results.push(json!({"command": id, "error": e.to_string()}));
+@@ -112,6 +112,13 @@
+ 
+ /// File › Scripts › Browse…: run a script file on the session.
+ fn browse(s: &mut Session, p: &Value) -> Result<Value> {
++    let steps = script_steps(p)?;
++    let results = run_steps(s, &steps);
++    let ok = results.iter().all(|r| r.get("error").is_none());
++    Ok(json!({"steps": steps.len(), "ok": ok, "results": results}))
++}
++
++pub(crate) fn script_steps(p: &Value) -> Result<Vec<(String, Value)>> {
+     let cmd = "file.scripts.browse";
+     let steps = match (p.get("path").and_then(Value::as_str), p.get("script").and_then(Value::as_str), p.get("steps")) {
+         (Some(path), _, _) => parse_script(&String::from_utf8_lossy(&read_file(path)?))?,
+@@ -120,9 +127,15 @@
+         _ => return Err(bad(cmd, "give \"path\" (a script file), \"script\" (its text) or \"steps\"")),
+     };
+     check_known(&steps, cmd)?;
+-    let results = run_steps(s, &steps);
+-    let ok = results.iter().all(|r| r.get("error").is_none());
+-    Ok(json!({"steps": steps.len(), "ok": ok, "results": results}))
++    Ok(steps)
++}
++
++pub(crate) fn binding_steps(binding: &ScriptBinding) -> Result<Vec<(String, Value)>> {
++    match (&binding.steps, &binding.script) {
++        (Some(steps), _) => parse_steps(steps, "scriptEvent"),
++        (None, Some(path)) => read_file(path).and_then(|bytes| parse_script(&String::from_utf8_lossy(&bytes))),
++        _ => Ok(Vec::new()),
++    }
+ }
+ 
+ // ---------- Script Events Manager ----------
+@@ -227,13 +240,12 @@
+     if jobs.is_empty() {
+         return 0;
+     }
++    if s.automation.enabled {
++        return s.queue_automation_event(event, jobs);
++    }
+     s.file_menu.firing = true;
+     for b in &jobs {
+-        let steps = match (&b.steps, &b.script) {
+-            (Some(st), _) => parse_steps(st, "scriptEvent"),
+-            (None, Some(path)) => read_file(path).and_then(|bytes| parse_script(&String::from_utf8_lossy(&bytes))),
+-            _ => Ok(Vec::new()),
+-        };
++        let steps = binding_steps(b);
+         let entry = match steps {
+             Ok(steps) => json!({"event": event, "binding": b.name, "results": run_steps(s, &steps)}),
+             Err(e) => json!({"event": event, "binding": b.name, "error": e.to_string()}),
+--- a/src/automation/tests.rs
++++ b/src/automation/tests.rs
+@@ -0,0 +1,328 @@
++use super::*;
++use std::sync::Mutex;
++
++fn folder(name: &str) -> std::path::PathBuf {
++    let path = std::env::temp_dir().join(format!("photocraft-async-{}-{name}", std::process::id()));
++    let _ = std::fs::remove_dir_all(&path);
++    std::fs::create_dir_all(&path).unwrap();
++    path
++}
++
++fn image(name: &str, color: &str) -> (Session, Vec<u8>) {
++    let mut session = Session::new();
++    session.execute("file.new", json!({"width":4,"height":3,"background":color})).unwrap();
++    let path = folder(name).join("source.png");
++    crate::file_cmds::save_doc(&session.active().unwrap().doc, path.to_str().unwrap(), None).unwrap();
++    let bytes = std::fs::read(&path).unwrap();
++    session.active_mut().unwrap().path = Some(path.to_string_lossy().into_owned());
++    (session, bytes)
++}
++
++fn sources(session: &mut Session) -> Arc<Mutex<VecDeque<SourceCommand>>> {
++    let queue = Arc::new(Mutex::new(VecDeque::new()));
++    let output = queue.clone();
++    session.source_file = Some(Arc::new(move |request| {
++        output.lock().unwrap().push_back(request);
++        Ok(json!({"pending":true}))
++    }));
++    session.automation.enabled = true;
++    queue
++}
++
++fn complete(session: &mut Session, request: &SourceCommand, bytes: Vec<u8>) {
++    session
++        .complete_source(request, SourceResult::Read { path: request.path.clone().unwrap_or_else(|| "fresh.png".into()), name: "fresh.png".into(), bytes })
++        .unwrap();
++    session.source_outcome(request, None, false);
++}
++
++fn drain(session: &mut Session, job: JobId) -> JobInfo {
++    for _ in 0..200 {
++        session.poll_jobs();
++        if let Some(info) = session.jobs_with_recent().into_iter().find(|info| info.id == job && info.state != "running") {
++            return info;
++        }
++        std::thread::yield_now();
++    }
++    panic!("continuation did not finish");
++}
++
++use crate::jobs::JobInfo;
++
++#[test]
++fn nested_source_script_pauses_then_edits_original_document_and_preserves_tab() {
++    let (mut session, _) = image("nested", "#000000");
++    let (_, white) = image("nested-fresh", "#ffffff");
++    let owner = session.active().unwrap().doc.id;
++    let queue = sources(&mut session);
++    let job = session
++        .start(
++            "file.scripts.browse",
++            json!({"steps":[["file.scripts.browse",{"steps":[["file.revert",{}],["image.adjustments.invert",{}]]}],["edit.undo",{}]]}),
++        )
++        .unwrap();
++    let Started::Job(job) = job else { panic!("script did not become a continuation") };
++    session.poll_jobs();
++    let request = queue.lock().unwrap().pop_front().unwrap();
++    assert_eq!(request.scope.unwrap().run, job.0);
++    assert!(session.journal.iter().all(|(id, _)| id != "file.revert"));
++    session.execute("file.new", json!({"width":2,"height":2})).unwrap();
++    let other = session.active().unwrap().doc.id;
++    complete(&mut session, &request, white);
++    assert!(session.complete_source(&request, SourceResult::Read { path: "unused".into(), name: "x".into(), bytes: vec![] }).is_err());
++    let result = drain(&mut session, job);
++    assert_eq!(result.state, "done");
++    assert_eq!(result.result.unwrap()["ok"], true);
++    assert_eq!(session.active().unwrap().doc.id, other);
++    let doc = &session.docs.iter().find(|state| state.doc.id == owner).unwrap().doc;
++    assert!(photocraft_compose::flatten(doc).px[0][0] > 0.99, "undo ran on owner after fresh revert + invert");
++}
++
++#[test]
++fn cancelled_source_action_never_runs_following_write() {
++    let (mut session, _) = image("cancel", "#000000");
++    let queue = sources(&mut session);
++    let output = folder("cancel-output").join("must-not-exist.png");
++    let control = output.with_file_name("actual-copy.png");
++    session.execute("file.saveACopy", json!({"path":control})).unwrap();
++    assert!(std::fs::read(&control).unwrap().starts_with(b"\x89PNG\r\n\x1a\n"));
++    let job = session.start_action("Revert then write", vec![("file.revert".into(), json!({})), ("file.saveACopy".into(), json!({"path":output}))]).unwrap();
++    session.poll_jobs();
++    let request = queue.lock().unwrap().pop_front().unwrap();
++    session.source_outcome(&request, None, true);
++    assert_eq!(drain(&mut session, job).state, "cancelled");
++    assert!(!output.exists());
++    assert_eq!(photocraft_compose::flatten(&session.active().unwrap().doc).px[0][0], 0.0);
++}
++
++#[test]
++fn source_failure_or_owner_change_stops_later_action_steps() {
++    for changed in [false, true] {
++        let (mut session, _) = image(if changed { "changed" } else { "failure" }, "#000000");
++        let queue = sources(&mut session);
++        let job = session.start_action("Fresh then invert", vec![("file.revert".into(), json!({})), ("image.adjustments.invert".into(), json!({}))]).unwrap();
++        session.poll_jobs();
++        let request = queue.lock().unwrap().pop_front().unwrap();
++        if changed {
++            session.active_mut().unwrap().revision += 1;
++            assert!(session.validate_source_owner(&request).is_err());
++        }
++        session.source_outcome(&request, Some("external read failed"), false);
++        let info = drain(&mut session, job);
++        assert_eq!(info.state, "failed");
++        assert!(info.error.unwrap().contains("external read failed"));
++        assert_eq!(photocraft_compose::flatten(&session.active().unwrap().doc).px[0][0], 0.0);
++    }
++}
++
++#[test]
++fn batch_scratch_source_identity_and_publication_are_separate_from_working_document() {
++    let (mut session, _) = image("batch-working", "#ff0000");
++    let working = session.active().unwrap().doc.clone();
++    let queue = sources(&mut session);
++    session.automation.defer_batch_publication = true;
++    let (first, _) = image("batch-first", "#000000");
++    let (mut second, fresh) = image("batch-second", "#ffffff");
++    let second_path = std::path::Path::new(second.active().unwrap().path.as_ref().unwrap()).with_file_name("two.png");
++    std::fs::write(&second_path, &fresh).unwrap();
++    second.active_mut().unwrap().path = Some(second_path.to_string_lossy().into_owned());
++    let inputs =
++        vec![first.active().unwrap().path.clone().unwrap(), second.active().unwrap().path.clone().unwrap(), first.active().unwrap().path.clone().unwrap()];
++    let output = folder("batch-output");
++    let Started::Job(job) = session
++        .start("file.automate.batch", json!({"input":inputs,"output":output,"format":"png","steps":[["file.revert",{}],["image.adjustments.invert",{}]]}))
++        .unwrap()
++    else {
++        panic!("batch was synchronous")
++    };
++    let mut previous = None;
++    for input in 0..2 {
++        for _ in 0..30 {
++            session.poll_jobs();
++            if !queue.lock().unwrap().is_empty() {
++                break;
++            }
++        }
++        let request = queue.lock().unwrap().pop_front().unwrap();
++        let scope = request.scope.unwrap();
++        assert_eq!(scope.run, job.0);
++        assert_ne!(scope.session, 0);
++        if let Some(old) = &previous {
++            assert!(session.validate_source_owner(old).is_err());
++        }
++        assert!(session.docs.iter().all(|state| !Arc::ptr_eq(&state.doc, &request.document)));
++        complete(&mut session, &request, fresh.clone());
++        previous = Some(request);
++        if input == 0 {
++            assert!(session.is_external_job(job));
++        }
++    }
++    for _ in 0..40 {
++        session.poll_jobs();
++    }
++    let encoded = session.take_automation_outputs();
++    assert_eq!(encoded.len(), 1);
++    assert_eq!(encoded[0].result["errors"].as_array().unwrap().len(), 1, "same filename conflict remains an original per-file error");
++    assert_eq!(encoded[0].result["files"].as_array().unwrap().len(), 2);
++    assert!(session.is_external_job(job), "encoding cannot imply publication success");
++    assert!(Arc::ptr_eq(&session.active().unwrap().doc, &working));
++    let bytes = std::fs::read(encoded[0].result["files"][0].as_str().unwrap()).unwrap();
++    let saved = crate::file_cmds::import("saved.png", &bytes).unwrap();
++    assert!(photocraft_compose::flatten(&saved).px[0][0] < 0.01);
++    assert!(session.complete_automation_publication(job, Err(EngineError::Other("provider publish failed".into()))));
++    let info = session.jobs_with_recent().into_iter().find(|info| info.id == job).unwrap();
++    assert_eq!(info.state, "failed");
++    assert!(!session.complete_automation_publication(job, Ok(json!({"published":true}))));
++    assert!(output.join("source.png").exists(), "failed publication retains encoded bytes");
++}
++
++#[test]
++fn source_journal_keeps_caller_parameters_for_cross_document_action_replay() {
++    let (mut session, fresh) = image("record-source", "#ffffff");
++    session.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
++    let first = session.active().unwrap().active_layer.unwrap();
++    let queue = sources(&mut session);
++    assert_eq!(session.execute("layer.smartObjects.editContents", json!({})).unwrap()["pending"], true);
++    let original = queue.lock().unwrap().pop_front().unwrap();
++    complete(&mut session, &original, fresh.clone());
++    let recorded = session.journal.last().unwrap().clone();
++    assert_eq!(recorded.0, "layer.smartObjects.editContents");
++    assert_eq!(recorded.1, json!({}), "stable completion target must not be recorded into an Action");
++    session.execute("file.new", json!({"width":4,"height":3})).unwrap();
++    session.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
++    let second = session.active().unwrap().active_layer.unwrap();
++    assert_ne!(first, second);
++    let job = session.start_action("Replay source", vec![recorded]).unwrap();
++    session.poll_jobs();
++    let replay = queue.lock().unwrap().pop_front().unwrap();
++    assert_eq!(replay.layer, Some(second));
++    complete(&mut session, &replay, fresh);
++    assert_eq!(drain(&mut session, job).state, "done");
++}
++
++#[test]
++fn edit_contents_continues_on_its_child_without_switching_the_users_other_tab() {
++    let (mut session, fresh) = image("edit-child", "#ffffff");
++    session.execute("layer.smartObjects.convertToSmartObject", json!({})).unwrap();
++    let parent = session.active().unwrap().doc.clone();
++    let queue = sources(&mut session);
++    let job = session
++        .start_action("Edit smart child", vec![("layer.smartObjects.editContents".into(), json!({})), ("image.adjustments.invert".into(), json!({}))])
++        .unwrap();
++    session.poll_jobs();
++    let request = queue.lock().unwrap().pop_front().unwrap();
++    session.execute("file.new", json!({"width":1,"height":1})).unwrap();
++    let other = session.active().unwrap().doc.id;
++    complete(&mut session, &request, fresh);
++    assert_eq!(drain(&mut session, job).state, "done");
++    assert_eq!(session.active().unwrap().doc.id, other);
++    assert!(Arc::ptr_eq(&session.docs.iter().find(|state| state.doc.id == parent.id).unwrap().doc, &parent));
++    let child = session.docs.iter().find(|state| state.doc.id != parent.id && state.doc.id != other).unwrap();
++    assert!(photocraft_compose::flatten(&child.doc).px[0][0] < 0.01);
++    assert!(child.is_dirty());
++}
++
++#[test]
++fn print_script_event_can_suspend_for_source_and_has_execution_only_recursion_guard() {
++    let (mut session, fresh) = image("print-event", "#000000");
++    session
++        .execute(
++            "file.scripts.scriptEventsManager",
++            json!({"enabled":true,"add":{"event":"print","name":"fresh print hook","steps":[["file.revert",{}],["file.printOneCopy",{}]]}}),
++        )
++        .unwrap();
++    let queue = sources(&mut session);
++    let prints = Arc::new(Mutex::new(Vec::new()));
++    let trace = prints.clone();
++    session.print_spool = Some(Arc::new(move |spool| {
++        assert!(spool.pdf.starts_with(b"%PDF"));
++        trace.lock().unwrap().push(spool.document);
++        Ok(crate::print_cmds::PrintSpoolResult {
++            pdf: "private-spool.pdf".into(),
++            request: 44,
++            status: "system request accepted; final job state unconfirmed".into(),
++        })
++    }));
++    let job = session.start_action("Physical print", vec![("file.print".into(), json!({}))]).unwrap();
++    for _ in 0..5 {
++        session.poll_jobs();
++    }
++    let request = queue.lock().unwrap().pop_front().unwrap();
++    assert_eq!(prints.lock().unwrap().len(), 1);
++    // Waiting does not globally suppress unrelated Script Events.
++    assert!(!session.file_menu.firing);
++    complete(&mut session, &request, fresh);
++    assert_eq!(drain(&mut session, job).state, "done");
++    assert_eq!(prints.lock().unwrap().len(), 2, "event Print One Copy must not recursively invoke its own binding");
++    assert!(queue.lock().unwrap().is_empty());
++    assert_eq!(session.file_menu.event_log.len(), 1);
++}
++
++#[test]
++fn equal_root_and_scratch_job_numbers_do_not_cross_complete_a_batch_step() {
++    let (mut session, _) = image("job-number-working", "#ff0000");
++    let (input, _) = image("job-number-input", "#000000");
++    session.automation.enabled = true;
++    let output = folder("job-number-output");
++    let batch = Batch {
++        process: FileProcess::new(
++            vec![input.active().unwrap().path.clone().unwrap()],
++            output.to_string_lossy().into_owned(),
++            "png".into(),
++            None,
++            String::new(),
++        ),
++        steps: vec![("document.pixel".into(), json!({"x":0,"y":0}))],
++        current: None,
++        generation: 1,
++    };
++    let id = session.enqueue_sequence("file.automate.batch", json!({}), "Batch", Vec::new(), Some(batch), false, None).unwrap();
++    let run = session.automation.runs.front_mut().unwrap();
++    let batch = run.batch.as_mut().unwrap();
++    let mut current = batch.process.next_input().unwrap().unwrap();
++    let (release, wait) = std::sync::mpsc::channel();
++    let Started::Job(child) = current
++        .session
++        .start_job(
++            "test.wait",
++            json!({}),
++            "Scratch",
++            false,
++            move |_| {
++                wait.recv().map_err(|error| EngineError::Other(error.to_string()))?;
++                Ok(())
++            },
++            |_, ()| Ok(json!({"realScratch":true})),
++        )
++        .unwrap()
++    else {
++        panic!("host job did not start")
++    };
++    assert_eq!(id, child, "distinct Sessions legitimately share local job numbers");
++    batch.current = Some(current);
++    run.frames.push(Frame::new(batch.steps.clone(), ReturnTo::Root).unwrap());
++    run.waiting = Some(Waiting::Job(child, Scope { run: id.0, session: 1, step: 1 }));
++    let unrelated = JobEvent {
++        id: child,
++        command: "other root job".into(),
++        label: "Other".into(),
++        document: None,
++        outcome: JobOutcome::Failed("must not complete scratch".into()),
++    };
++    session.tick_automation(&[unrelated]);
++    assert!(session.is_external_job(id));
++    let run = session.automation.runs.front().unwrap();
++    assert!(run.ready.is_none());
++    assert!(matches!(run.waiting,Some(Waiting::Job(_,scope)) if scope.session==1));
++    release.send(()).unwrap();
++    for _ in 0..200 {
++        session.poll_jobs();
++        if !session.is_external_job(id) {
++            break;
++        }
++        std::thread::sleep(std::time::Duration::from_millis(1));
++    }
++    let job = session.jobs_with_recent().into_iter().find(|job| job.id == id).unwrap();
++    assert_eq!(job.state, "done");
++    assert_eq!(job.result.unwrap()["errors"], json!([]));
++}
+--- a/src/automation.rs
++++ b/src/automation.rs
+@@ -0,0 +1,685 @@
++//! Resumable platform command sequences. No UI, URI or image algorithm lives here.
++
++use std::collections::VecDeque;
++use std::sync::Arc;
++
++use photocraft_doc::{DocId, Document, LayerId};
++use serde_json::{Value, json};
++
++use crate::automate_cmds::ScriptBinding;
++use crate::file_cmds::{FileProcess, ProcessInput};
++use crate::jobs::{JobCtx, JobEvent, JobId, JobOutcome, Started};
++use crate::source_cmds::{SourceCommand, SourceResult};
++use crate::{EngineError, Result, Session};
++
++#[cfg(test)]
++mod tests;
++
++const MAX_DEPTH: usize = 32;
++const MAX_STEPS: usize = 10_000;
++const TICK_STEPS: usize = 8;
++
++/// Session and step identities remain distinct even when persisted DocIds overlap.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Scope {
++    pub run: u64,
++    pub session: u64,
++    pub step: u64,
++}
++
++#[derive(Default)]
++pub struct Automation {
++    pub enabled: bool,
++    pub defer_batch_publication: bool,
++    pub(crate) permit: Option<Scope>,
++    runs: VecDeque<Run>,
++    events: VecDeque<(String, ScriptBinding)>,
++    encoded: VecDeque<Encoded>,
++}
++
++pub struct Encoded {
++    pub job: JobId,
++    pub command: String,
++    pub result: Value,
++}
++
++struct Run {
++    id: JobId,
++    context: JobCtx,
++    command: String,
++    params: Value,
++    action: bool,
++    frames: Vec<Frame>,
++    batch: Option<Batch>,
++    flow: Flow,
++    waiting: Option<Waiting>,
++    ready: Option<Result<Value>>,
++    steps: u64,
++    result: Option<Value>,
++    publication: bool,
++    events: VecDeque<(String, ScriptBinding)>,
++}
++
++struct Batch {
++    process: FileProcess,
++    steps: Vec<(String, Value)>,
++    current: Option<ProcessInput>,
++    generation: u64,
++}
++
++struct Frame {
++    steps: Vec<(String, Value)>,
++    next: usize,
++    results: Vec<Value>,
++    failed: bool,
++    returns: ReturnTo,
++}
++
++enum ReturnTo {
++    Root,
++    Script(String, Value),
++    Event(String, String),
++}
++
++#[derive(Clone, Copy)]
++enum Waiting {
++    Source(Scope),
++    Job(JobId, Scope),
++}
++
++#[derive(Default)]
++struct Flow {
++    document: Option<DocId>,
++    guard: Option<Guard>,
++}
++
++struct Guard {
++    document: Arc<Document>,
++    revision: u64,
++    path: Option<String>,
++    layer: Option<LayerId>,
++    selected: Vec<LayerId>,
++    channels: crate::channel_cmds::ChannelView,
++}
++
++impl Flow {
++    fn capture(session: &Session) -> Self {
++        Self::for_document(session, session.active().map(|state| state.doc.id))
++    }
++
++    fn for_document(session: &Session, document: Option<DocId>) -> Self {
++        let guard = document.and_then(|id| session.docs.iter().find(|state| state.doc.id == id)).map(|state| Guard {
++            document: state.doc.clone(),
++            revision: state.revision,
++            path: state.path.clone(),
++            layer: state.active_layer,
++            selected: state.selected_layers.clone(),
++            channels: state.channel_view.clone(),
++        });
++        Self { document, guard }
++    }
++
++    fn activate(&self, session: &mut Session) -> Result<()> {
++        if let Some(guard) = &self.guard {
++            let index = session
++                .docs
++                .iter()
++                .position(|state| state.doc.id == guard.document.id)
++                .ok_or_else(|| EngineError::Other("the automation document was closed".into()))?;
++            let state = session.docs.get(index).ok_or(EngineError::NoDocument)?;
++            if !Arc::ptr_eq(&state.doc, &guard.document)
++                || state.revision != guard.revision
++                || state.path != guard.path
++                || state.active_layer != guard.layer
++                || state.selected_layers != guard.selected
++                || state.channel_view != guard.channels
++            {
++                return Err(EngineError::Other("the automation document or layer selection changed while a step was pending".into()));
++            }
++            session.set_active(index);
++        } else {
++            session.active = None;
++        }
++        Ok(())
++    }
++}
++
++impl Frame {
++    fn new(steps: Vec<(String, Value)>, returns: ReturnTo) -> Result<Self> {
++        if steps.len() > MAX_STEPS {
++            return Err(EngineError::Other("the automation step limit was exceeded".into()));
++        }
++        Ok(Self { steps, next: 0, results: Vec::new(), failed: false, returns })
++    }
++
++    fn finish(&mut self, result: Result<Value>) {
++        let Some((id, _)) = self.steps.get(self.next) else { return };
++        match result {
++            Ok(value) => {
++                self.failed |= value.get("ok").and_then(Value::as_bool) == Some(false);
++                self.results.push(json!({"command":id,"result":value}));
++            }
++            Err(error) => {
++                self.failed = true;
++                self.results.push(json!({"command":id,"error":error.to_string()}));
++            }
++        }
++        self.next = self.next.saturating_add(1);
++    }
++
++    fn result(&self) -> Value {
++        let mut result = json!({"steps":self.steps.len(),"ok":!self.failed,"results":self.results});
++        if self.failed {
++            result["error"] = json!(step_error(&result, 0));
++        }
++        result
++    }
++}
++
++pub(crate) fn supports(id: &str) -> bool {
++    matches!(id, "file.scripts.browse" | "file.automate.batch")
++}
++
++impl Session {
++    pub fn start_action(&mut self, name: &str, steps: Vec<(String, Value)>) -> Result<JobId> {
++        if !self.automation.enabled {
++            return Err(EngineError::Other("asynchronous actions are not enabled for this session".into()));
++        }
++        self.enqueue_sequence("action.play", json!({"name":name}), name, steps, None, true, None)
++    }
++
++    pub fn cancel_actions(&mut self) {
++        for id in self.jobs().into_iter().filter(|job| job.command == "action.play").map(|job| job.id).collect::<Vec<_>>() {
++            self.cancel_job(id);
++        }
++    }
++
++    pub(crate) fn begin_automation(&mut self, command: &str, params: Value) -> Result<JobId> {
++        if command == "file.scripts.browse" {
++            let steps = crate::automate_cmds::script_steps(&params)?;
++            self.enqueue_sequence(command, params, "Running script", steps, None, false, None)
++        } else {
++            let raw = params
++                .get("steps")
++                .or_else(|| params.get("action"))
++                .ok_or_else(|| EngineError::BadParams { cmd: command.into(), msg: "missing steps".into() })?;
++            let steps = crate::file_cmds::parse_steps(raw)?;
++            for (id, _) in &steps {
++                if crate::commands::find(id).is_none() {
++                    return Err(EngineError::UnknownCommand(id.clone()));
++                }
++            }
++            let inputs = crate::file_cmds::batch_inputs(&params, command)?;
++            if inputs.len() > 500 {
++                return Err(EngineError::Other("too many batch inputs".into()));
++            }
++            let output = crate::file_cmds::directory_output(self, &params, command)?;
++            let format = params.get("format").and_then(Value::as_str).unwrap_or("same").into();
++            let quality = crate::file_cmds::f64_param(&params, "quality");
++            let batch = Batch { process: FileProcess::new(inputs, output, format, quality, String::new()), steps, current: None, generation: 0 };
++            self.enqueue_sequence(command, params, "Processing batch", Vec::new(), Some(batch), false, None)
++        }
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    fn enqueue_sequence(
++        &mut self,
++        command: &str,
++        params: Value,
++        label: &str,
++        steps: Vec<(String, Value)>,
++        batch: Option<Batch>,
++        action: bool,
++        event: Option<(String, String)>,
++    ) -> Result<JobId> {
++        let frame = if batch.is_none() { Some(Frame::new(steps, event.map_or(ReturnTo::Root, |(event, name)| ReturnTo::Event(event, name)))?) } else { None };
++        let document = if batch.is_some() { None } else { self.active().map(|state| state.doc.id) };
++        let (id, context) = self.external_job(command, label, document)?;
++        self.automation.runs.push_back(Run {
++            id,
++            context,
++            command: command.into(),
++            params,
++            action,
++            frames: frame.into_iter().collect(),
++            batch,
++            flow: Flow::capture(self),
++            waiting: None,
++            ready: None,
++            steps: 0,
++            result: None,
++            publication: false,
++            events: VecDeque::new(),
++        });
++        Ok(id)
++    }
++
++    pub(crate) fn queue_automation_event(&mut self, event: &str, bindings: Vec<ScriptBinding>) -> usize {
++        let mut accepted = 0;
++        for binding in bindings {
++            if let Some(scope) = self.automation.permit {
++                let queue = self.automation.runs.iter_mut().find(|run| run.id.0 == scope.run).map_or(&mut self.automation.events, |run| &mut run.events);
++                if queue.len() < 32 {
++                    queue.push_back((event.into(), binding));
++                    accepted += 1;
++                } else {
++                    self.file_menu.event_log.push(json!({"event":event,"binding":binding.name,"error":"too many pending script events"}));
++                }
++            } else {
++                match crate::automate_cmds::binding_steps(&binding).and_then(|steps| {
++                    self.enqueue_sequence("scriptEvent", Value::Null, "Running script event", steps, None, false, Some((event.into(), binding.name.clone())))
++                }) {
++                    Ok(_) => accepted += 1,
++                    Err(error) => self.file_menu.event_log.push(json!({"event":event,"binding":binding.name,"error":error.to_string()})),
++                }
++            }
++        }
++        trim_events(self);
++        accepted
++    }
++
++    /// A source response applies only to the precise main/scratch scope that asked for it.
++    pub fn validate_source_owner(&self, request: &SourceCommand) -> Result<()> {
++        if let Some(scope) = request.scope {
++            let run =
++                self.automation.runs.iter().find(|run| run.id.0 == scope.run).ok_or_else(|| EngineError::Other("the automation request has ended".into()))?;
++            if run.context.cancelled() {
++                return Err(EngineError::Cancelled);
++            }
++            if run.ready.is_some() {
++                return Err(EngineError::Other("the automation source response was already completed".into()));
++            }
++            if !matches!(run.waiting,Some(Waiting::Source(expected)) if expected==scope) {
++                return Err(EngineError::Other("the source response belongs to another automation step".into()));
++            }
++            if scope.session != 0 {
++                let batch = run
++                    .batch
++                    .as_ref()
++                    .filter(|batch| batch.generation == scope.session)
++                    .ok_or_else(|| EngineError::Other("the batch input has ended".into()))?;
++                let scratch = batch.current.as_ref().ok_or(EngineError::NoDocument)?;
++                return validate_document(&scratch.session, request);
++            }
++            if let Some(guard) = &run.flow.guard {
++                let state = self.docs.iter().find(|state| state.doc.id == guard.document.id).ok_or(EngineError::NoDocument)?;
++                if state.active_layer != guard.layer || state.selected_layers != guard.selected || state.channel_view != guard.channels {
++                    return Err(EngineError::Other("the automation layer selection changed while the source was pending".into()));
++                }
++            }
++        }
++        validate_document(self, request)
++    }
++
++    pub(crate) fn complete_automation_source(&mut self, request: &SourceCommand, response: SourceResult) -> Result<Value> {
++        self.validate_source_owner(request)?;
++        let scope = request.scope.ok_or_else(|| EngineError::Other("missing automation scope".into()))?;
++        let mut state = std::mem::take(&mut self.automation);
++        self.automation.enabled = state.enabled;
++        self.automation.defer_batch_publication = state.defer_batch_publication;
++        self.automation.permit = Some(scope);
++        let result = if let Some(run) = state.runs.iter_mut().find(|run| run.id.0 == scope.run) {
++            if scope.session == 0 {
++                let result = self.complete_source_direct(request, response);
++                let document = result
++                    .as_ref()
++                    .ok()
++                    .and_then(|value| value["document"].as_u64())
++                    .and_then(|index| usize::try_from(index).ok())
++                    .and_then(|index| self.docs.get(index))
++                    .map(|state| state.doc.id)
++                    .or(Some(request.document.id));
++                run.flow = Flow::for_document(self, document);
++                result
++            } else {
++                match run.batch.as_mut().and_then(|batch| batch.current.as_mut()) {
++                    Some(scratch) => {
++                        scratch.session.automation.permit = Some(scope);
++                        let result = scratch.session.complete_source_direct(request, response);
++                        scratch.session.automation.permit = None;
++                        result
++                    }
++                    None => Err(EngineError::NoDocument),
++                }
++            }
++        } else {
++            Err(EngineError::Cancelled)
++        };
++        if let Some(run) = state.runs.iter_mut().find(|run| run.id.0 == scope.run) {
++            run.ready = Some(clone_result(&result));
++            run.events.extend(std::mem::take(&mut self.automation.events));
++        }
++        state.events.extend(std::mem::take(&mut self.automation.events));
++        self.automation = state;
++        result
++    }
++
++    /// Terminal cancellation/error must also release a waiting continuation.
++    pub fn source_outcome(&mut self, request: &SourceCommand, error: Option<&str>, cancelled: bool) {
++        let Some(scope) = request.scope else { return };
++        let Some(run) = self.automation.runs.iter_mut().find(|run| run.id.0 == scope.run) else { return };
++        if !matches!(run.waiting,Some(Waiting::Source(expected)) if expected==scope) {
++            return;
++        }
++        if cancelled {
++            run.ready = Some(Err(EngineError::Cancelled));
++        } else if let Some(error) = error {
++            run.ready = Some(Err(EngineError::Other(error.into())));
++        } else if run.ready.is_none() {
++            run.ready = Some(Ok(json!({"published":true})));
++        }
++    }
++
++    pub(crate) fn tick_automation(&mut self, events: &[JobEvent]) {
++        if !self.automation.enabled {
++            return;
++        }
++        let mut state = std::mem::take(&mut self.automation);
++        self.automation.enabled = true;
++        self.automation.defer_batch_publication = state.defer_batch_publication;
++        if let Some(mut run) = state.runs.pop_front() {
++            let complete = self.advance_sequence(&mut run, events);
++            state.events.extend(std::mem::take(&mut self.automation.events));
++            if !complete {
++                state.runs.push_front(run);
++            }
++        }
++        state.runs.extend(std::mem::take(&mut self.automation.runs));
++        state.encoded.extend(std::mem::take(&mut self.automation.encoded));
++        self.automation = state;
++        trim_events(self);
++    }
++
++    fn advance_sequence(&mut self, run: &mut Run, events: &[JobEvent]) -> bool {
++        if run.publication {
++            return false;
++        }
++        if let Some(Waiting::Job(id, scope)) = run.waiting {
++            let mut scratch_events = Vec::new();
++            if scope.session != 0
++                && let Some(input) = run.batch.as_mut().and_then(|batch| batch.current.as_mut())
++            {
++                scratch_events = input.session.poll_jobs();
++            }
++            let owner_events = if scope.session == 0 { events } else { &scratch_events };
++            if let Some(event) = owner_events.iter().find(|event| event.id == id) {
++                run.ready = Some(match &event.outcome {
++                    JobOutcome::Done(value) => Ok(value.clone()),
++                    JobOutcome::Failed(error) => Err(EngineError::Other(error.clone())),
++                    JobOutcome::Cancelled => Err(EngineError::Cancelled),
++                });
++                if scope.session == 0 {
++                    run.flow = Flow::for_document(self, run.flow.document);
++                }
++            }
++        }
++        if run.context.cancelled() {
++            if let Some(Waiting::Source(_)) = run.waiting
++                && run.ready.is_none()
++            {
++                run.context.progress(0.0, "Cancelling; waiting for the file operation to settle");
++                return false;
++            }
++            if let Some(Waiting::Job(id, scope)) = run.waiting {
++                if scope.session == 0 {
++                    self.cancel_job(id);
++                } else if let Some(input) = run.batch.as_mut().and_then(|batch| batch.current.as_mut()) {
++                    input.session.cancel_job(id);
++                }
++            }
++            self.end_external_job(run.id, JobOutcome::Cancelled, run.batch.as_ref().map(|batch| batch.process.result()));
++            return true;
++        }
++        if run.waiting.is_some() {
++            let Some(result) = run.ready.take() else { return false };
++            run.waiting = None;
++            if matches!(result, Err(EngineError::Cancelled)) {
++                run.context.cancel();
++                return self.advance_sequence(run, events);
++            }
++            if let Some(frame) = run.frames.last_mut() {
++                frame.finish(result);
++            }
++        }
++        self.push_sequence_events(run);
++        for _ in 0..TICK_STEPS {
++            if run.frames.is_empty() {
++                if let Some(batch) = &mut run.batch {
++                    if let Some(input) = batch.current.take() {
++                        let failed = run.result.take().filter(|value| value["ok"] == false);
++                        let result = if let Some(value) = failed { Err(EngineError::Other(step_error(&value, 0))) } else { batch.process.encode(&input) };
++                        batch.process.finish(input.path, result);
++                    }
++                    loop {
++                        match batch.process.next_input() {
++                            Some(Err((path, error))) => batch.process.finish(path, Err(error)),
++                            Some(Ok(mut input)) => {
++                                input.session.print_spool = self.print_spool.clone();
++                                input.session.source_file = self.source_file.clone();
++                                batch.generation = batch.generation.saturating_add(1);
++                                batch.current = Some(input);
++                                match Frame::new(batch.steps.clone(), ReturnTo::Root) {
++                                    Ok(frame) => run.frames.push(frame),
++                                    Err(error) => {
++                                        self.end_external_job(run.id, JobOutcome::Failed(error.to_string()), Some(batch.process.result()));
++                                        return true;
++                                    }
++                                }
++                                break;
++                            }
++                            None => {
++                                let result = batch.process.result();
++                                if self.automation.defer_batch_publication {
++                                    run.publication = true;
++                                    self.automation.encoded.push_back(Encoded { job: run.id, command: run.command.clone(), result: result.clone() });
++                                    run.result = Some(result);
++                                    run.context.progress(0.99, "Waiting for folder publication confirmation");
++                                    return false;
++                                }
++                                self.finish_sequence(run, JobOutcome::Done(result));
++                                return true;
++                            }
++                        }
++                    }
++                } else {
++                    let result = run.result.take().unwrap_or(json!({"ok":true,"steps":0,"results":[]}));
++                    if run.action && result["ok"] == false {
++                        self.finish_sequence(run, JobOutcome::Failed(step_error(&result, 0)));
++                    } else {
++                        self.finish_sequence(run, JobOutcome::Done(result));
++                    }
++                    return true;
++                }
++            }
++            if run.frames.last().is_some_and(|frame| frame.failed || frame.next >= frame.steps.len()) {
++                let Some(frame) = run.frames.pop() else { continue };
++                let result = frame.result();
++                match frame.returns {
++                    ReturnTo::Root => run.result = Some(result),
++                    ReturnTo::Script(id, params) => {
++                        if run.batch.is_none()
++                            && let Some(spec) = crate::commands::find(&id)
++                        {
++                            self.sequence_bookkeeping(run, &id, params, spec.journal);
++                        }
++                        if let Some(parent) = run.frames.last_mut() {
++                            parent.finish(Ok(result));
++                        }
++                    }
++                    ReturnTo::Event(event, binding) => {
++                        self.file_menu.event_log.push(json!({"event":event,"binding":binding,"results":result["results"]}));
++                        if run.frames.is_empty() {
++                            run.result = Some(result);
++                        }
++                    }
++                }
++                continue;
++            }
++            let Some((id, params)) = run.frames.last().and_then(|frame| frame.steps.get(frame.next)).cloned() else { continue };
++            if id == "file.scripts.browse" {
++                let frame = crate::automate_cmds::script_steps(&params).and_then(|steps| Frame::new(steps, ReturnTo::Script(id.clone(), params)));
++                if run.frames.len() >= MAX_DEPTH {
++                    if let Some(parent) = run.frames.last_mut() {
++                        parent.finish(Err(EngineError::Other("nested script depth limit exceeded".into())));
++                    }
++                } else {
++                    match frame {
++                        Ok(frame) => run.frames.push(frame),
++                        Err(error) => {
++                            if let Some(parent) = run.frames.last_mut() {
++                                parent.finish(Err(error));
++                            }
++                        }
++                    }
++                }
++                continue;
++            }
++            run.steps = run.steps.saturating_add(1);
++            if run.steps > MAX_STEPS as u64 {
++                self.finish_sequence(run, JobOutcome::Failed("automation step limit exceeded".into()));
++                return true;
++            }
++            let scope = Scope { run: run.id.0, session: run.batch.as_ref().map_or(0, |batch| batch.generation), step: run.steps };
++            let event = run.frames.iter().any(|frame| matches!(frame.returns, ReturnTo::Event(_, _)));
++            let result = if let Some(input) = run.batch.as_mut().and_then(|batch| batch.current.as_mut()) {
++                input.session.automation.permit = Some(scope);
++                let result = input.session.start(&id, params);
++                input.session.automation.permit = None;
++                result
++            } else {
++                let previous = self.active().map(|state| state.doc.id);
++                let previous_flow = run.flow.document;
++                self.automation.permit = Some(scope);
++                let firing = self.file_menu.firing;
++                self.file_menu.firing |= event;
++                let result = match run.flow.activate(self) {
++                    Ok(()) => {
++                        let result = self.start(&id, params);
++                        run.flow = Flow::capture(self);
++                        result
++                    }
++                    Err(error) => Err(error),
++                };
++                self.file_menu.firing = firing;
++                self.automation.permit = None;
++                if previous != previous_flow
++                    && let Some(index) = previous.and_then(|id| self.docs.iter().position(|state| state.doc.id == id))
++                {
++                    self.set_active(index);
++                }
++                result
++            };
++            run.context.progress(0.0, &format!("Step {}: {}", run.steps, id));
++            match result {
++                Ok(Started::Job(id)) => run.waiting = Some(Waiting::Job(id, scope)),
++                Ok(Started::Done(value)) if crate::source_cmds::supports(&id) && value["pending"] == true => run.waiting = Some(Waiting::Source(scope)),
++                Ok(Started::Done(value)) => {
++                    if let Some(frame) = run.frames.last_mut() {
++                        frame.finish(Ok(value));
++                    }
++                }
++                Err(error) => {
++                    if let Some(frame) = run.frames.last_mut() {
++                        frame.finish(Err(error));
++                    }
++                }
++            }
++            run.events.extend(std::mem::take(&mut self.automation.events));
++            if run.waiting.is_some() {
++                return false;
++            }
++            self.push_sequence_events(run);
++        }
++        false
++    }
++
++    fn push_sequence_events(&mut self, run: &mut Run) {
++        while let Some((event, binding)) = run.events.pop_back() {
++            match crate::automate_cmds::binding_steps(&binding).and_then(|steps| Frame::new(steps, ReturnTo::Event(event.clone(), binding.name.clone()))) {
++                Ok(frame) if run.frames.len() < MAX_DEPTH => run.frames.push(frame),
++                _ => self
++                    .file_menu
++                    .event_log
++                    .push(json!({"event":event,"binding":binding.name,"error":"script event cannot be resumed within the depth/parse limit"})),
++            }
++        }
++    }
++
++    fn sequence_bookkeeping(&mut self, run: &Run, command: &str, params: Value, journal: bool) {
++        let previous = self.active().map(|state| state.doc.id);
++        let permit = self.automation.permit;
++        if run.batch.is_some() || run.flow.activate(self).is_ok() {
++            self.automation.permit = Some(Scope { run: run.id.0, session: 0, step: run.steps });
++            self.after_command(command, params, journal);
++        }
++        self.automation.permit = permit;
++        if let Some(index) = previous.and_then(|id| self.docs.iter().position(|state| state.doc.id == id)) {
++            self.set_active(index);
++        }
++    }
++
++    fn finish_sequence(&mut self, run: &Run, outcome: JobOutcome) {
++        if matches!(outcome, JobOutcome::Done(_))
++            && let Some(spec) = crate::commands::find(&run.command)
++        {
++            self.sequence_bookkeeping(run, &run.command, run.params.clone(), spec.journal);
++        }
++        self.end_external_job(run.id, outcome, run.batch.as_ref().map(|batch| batch.process.result()));
++    }
++
++    pub fn take_automation_outputs(&mut self) -> Vec<Encoded> {
++        self.automation.encoded.drain(..).collect()
++    }
++
++    pub fn complete_automation_publication(&mut self, id: JobId, result: Result<Value>) -> bool {
++        let Some(index) = self.automation.runs.iter().position(|run| run.id == id && run.publication) else { return false };
++        let Some(run) = self.automation.runs.remove(index) else { return false };
++        let outcome = match result {
++            Ok(value) => JobOutcome::Done(value),
++            Err(EngineError::Cancelled) => JobOutcome::Cancelled,
++            Err(error) => JobOutcome::Failed(error.to_string()),
++        };
++        self.finish_sequence(&run, outcome);
++        true
++    }
++}
++
++fn validate_document(session: &Session, request: &SourceCommand) -> Result<()> {
++    let state =
++        session.docs.iter().find(|state| state.doc.id == request.document.id).ok_or_else(|| EngineError::Other("the original document was closed".into()))?;
++    if state.revision != request.revision || state.path != request.path || !Arc::ptr_eq(&state.doc, &request.document) {
++        return Err(EngineError::Other("the original document changed while the source was pending".into()));
++    }
++    Ok(())
++}
++
++fn clone_result(result: &Result<Value>) -> Result<Value> {
++    match result {
++        Ok(value) => Ok(value.clone()),
++        Err(EngineError::Cancelled) => Err(EngineError::Cancelled),
++        Err(error) => Err(EngineError::Other(error.to_string())),
++    }
++}
++
++fn step_error(value: &Value, depth: usize) -> String {
++    if depth < MAX_DEPTH
++        && let Some(results) = value["results"].as_array()
++    {
++        for (index, result) in results.iter().enumerate() {
++            if let Some(error) = result["error"].as_str() {
++                return format!("Step {} ({}) failed: {error}", index + 1, result["command"].as_str().unwrap_or("command"));
++            }
++            if result["result"]["ok"] == false {
++                return step_error(&result["result"], depth + 1);
++            }
++        }
++    }
++    "the automation step failed".into()
++}
++
++fn trim_events(session: &mut Session) {
++    if session.file_menu.event_log.len() > 32 {
++        let extra = session.file_menu.event_log.len() - 32;
++        session.file_menu.event_log.drain(..extra);
++    }
++}
+--- a/src/file_cmds.rs
++++ b/src/file_cmds.rs
+@@ -40,7 +40,9 @@
+     native(s)?;
+     let d = s.active().ok_or("no document open")?;
+     let path = d.path.as_deref().ok_or("the document has never been saved")?;
+-    if !is_file(path) {
++    // A platform source service validates its external authority; an absent
++    // internal retained copy must not masquerade as an absent external file.
++    if s.source_file.is_none() && !is_file(path) {
+         return Err(format!("{path} is not a file on disk"));
+     }
+     Ok(())
+@@ -96,7 +98,7 @@
+ 
+ /// Files of a folder that look like images we can open, sorted by name.
+ #[cfg(not(target_arch = "wasm32"))]
+-pub(crate) fn list_images(dir: &str) -> Result<Vec<String>> {
++pub fn list_images(dir: &str) -> Result<Vec<String>> {
+     let rd = std::fs::read_dir(dir).map_err(|e| EngineError::Other(format!("{dir}: {e}")))?;
+     let mut out: Vec<String> = rd
+         .filter_map(|e| e.ok())
+@@ -108,7 +110,7 @@
+     Ok(out)
+ }
+ #[cfg(target_arch = "wasm32")]
+-pub(crate) fn list_images(dir: &str) -> Result<Vec<String>> {
++pub fn list_images(dir: &str) -> Result<Vec<String>> {
+     Err(EngineError::Other(format!("cannot list {dir}: no file system on the web")))
+ }
+ 
+@@ -242,7 +244,14 @@
+ fn revert(s: &mut Session) -> Result<Value> {
+     let path = s.active().and_then(|d| d.path.clone()).ok_or(EngineError::Other("the document has never been saved".into()))?;
+     let bytes = read_file(&path)?;
+-    let fresh = import(&file_name(&path), &bytes)?;
++    revert_bytes(s, &file_name(&path), &bytes)
++}
++
++/// Complete a platform-authorized fresh read using the original Revert history
++/// semantics. The existing path/source authority and document identity survive.
++pub(crate) fn revert_bytes(s: &mut Session, name: &str, bytes: &[u8]) -> Result<Value> {
++    let path = s.active().and_then(|d| d.path.clone()).ok_or(EngineError::NoDocument)?;
++    let fresh = import(name, bytes)?;
+     s.edit("Revert", |doc, active| {
+         let (id, name) = (doc.id, doc.name.clone());
+         *doc = fresh;
+@@ -577,7 +586,7 @@
+ }
+ 
+ /// One `[id, params]` / `{command, params}` / `{id, params}` step of an action.
+-fn parse_steps(v: &Value) -> Result<Vec<(String, Value)>> {
++pub(crate) fn parse_steps(v: &Value) -> Result<Vec<(String, Value)>> {
+     let bad = |m: &str| EngineError::BadParams { cmd: "file.automate.batch".into(), msg: m.into() };
+     let arr = v.as_array().ok_or_else(|| bad("\"steps\" must be an array"))?;
+     arr.iter()
+@@ -614,33 +623,83 @@
+     suffix: &str,
+     f: &dyn Fn(&mut Session) -> Result<()>,
+ ) -> Value {
+-    let mut files = Vec::new();
+-    let mut errors = Vec::new();
+-    let mut written = OutputClaims::default();
+-    for path in inputs {
+-        let ext =
+-            if format == "same" { path.rsplit('.').next().unwrap_or("png").to_ascii_lowercase() } else { format.trim_start_matches('.').to_ascii_lowercase() };
+-        let out = join(output, &format!("{}{suffix}.{ext}", stem(path)));
+-        let r = (|| -> Result<()> {
+-            written.check(&out).map_err(EngineError::Other)?;
+-            let bytes = read_file(path)?;
+-            let mut scratch = Session::new();
+-            let doc = import(&file_name(path), &bytes)?;
+-            scratch.add_document(doc, Some(path.clone()));
+-            f(&mut scratch)?;
+-            let d = scratch.active().ok_or(EngineError::NoDocument)?;
+-            save_doc(&d.doc, &out, quality)?;
+-            Ok(())
++    let mut process = FileProcess::new(inputs.to_vec(), output.into(), format.into(), quality, suffix.into());
++    while let Some(next) = process.next_input() {
++        match next {
++            Ok(mut input) => {
++                let result = f(&mut input.session).and_then(|()| process.encode(&input));
++                process.finish(input.path, result);
++            }
++            Err((path, error)) => process.finish(path, Err(error)),
++        }
++    }
++    process.result()
++}
++
++/// The original per-input pipeline split only at its command callback boundary.
++/// An asynchronous action keeps the scratch session here until its steps end.
++pub(crate) struct FileProcess {
++    inputs: Vec<String>,
++    next: usize,
++    output: String,
++    format: String,
++    quality: Option<f64>,
++    suffix: String,
++    files: Vec<String>,
++    errors: Vec<Value>,
++    written: OutputClaims,
++}
++
++pub(crate) struct ProcessInput {
++    pub path: String,
++    pub output: String,
++    pub session: Box<Session>,
++}
++
++impl FileProcess {
++    pub(crate) fn new(inputs: Vec<String>, output: String, format: String, quality: Option<f64>, suffix: String) -> Self {
++        Self { inputs, next: 0, output, format, quality, suffix, files: Vec::new(), errors: Vec::new(), written: OutputClaims::default() }
++    }
++
++    pub(crate) fn next_input(&mut self) -> Option<std::result::Result<ProcessInput, (String, EngineError)>> {
++        let path = self.inputs.get(self.next)?.clone();
++        self.next = self.next.saturating_add(1);
++        let ext = if self.format == "same" {
++            path.rsplit('.').next().unwrap_or("png").to_ascii_lowercase()
++        } else {
++            self.format.trim_start_matches('.').to_ascii_lowercase()
++        };
++        let output = join(&self.output, &format!("{}{suffix}.{ext}", stem(&path), suffix = self.suffix));
++        let result = (|| -> Result<ProcessInput> {
++            self.written.check(&output).map_err(EngineError::Other)?;
++            let bytes = read_file(&path)?;
++            let mut session = Box::new(Session::new());
++            let doc = import(&file_name(&path), &bytes)?;
++            session.add_document(doc, Some(path.clone()));
++            Ok(ProcessInput { path: path.clone(), output, session })
+         })();
+-        match r {
+-            Ok(()) => {
+-                written.record(&out, path);
+-                files.push(out);
++        Some(result.map_err(|error| (path, error)))
++    }
++
++    pub(crate) fn encode(&self, input: &ProcessInput) -> Result<String> {
++        let document = input.session.active().ok_or(EngineError::NoDocument)?;
++        save_doc(&document.doc, &input.output, self.quality)?;
++        Ok(input.output.clone())
++    }
++
++    pub(crate) fn finish(&mut self, input: String, result: Result<String>) {
++        match result {
++            Ok(output) => {
++                self.written.record(&output, &input);
++                self.files.push(output);
+             }
+-            Err(e) => errors.push(json!({"file": path, "error": e.to_string()})),
+-        }
+-    }
+-    json!({"files": files, "errors": errors})
++            Err(error) => self.errors.push(json!({"file":input,"error":error.to_string()})),
++        }
++    }
++
++    pub(crate) fn result(&self) -> Value {
++        json!({"files":self.files,"errors":self.errors})
++    }
+ }
+ 
+ /// The output paths a batch run has written, so a later input whose output name matches an
+@@ -664,7 +723,7 @@
+     }
+ }
+ 
+-fn batch(_s: &mut Session, p: &Value) -> Result<Value> {
++fn batch(s: &mut Session, p: &Value) -> Result<Value> {
+     let cmd = "file.automate.batch";
+     let steps =
+         parse_steps(p.get("steps").or_else(|| p.get("action")).ok_or_else(|| EngineError::BadParams { cmd: cmd.into(), msg: "missing \"steps\"".into() })?)?;
+@@ -672,10 +731,12 @@
+         return Err(EngineError::BadParams { cmd: cmd.into(), msg: format!("unknown command `{id}` in the action") });
+     }
+     let inputs = batch_inputs(p, cmd)?;
+-    let output = str_param(p, "output", cmd)?.to_string();
++    let output = directory_output(s, p, cmd)?;
+     let format = p.get("format").and_then(Value::as_str).unwrap_or("same").to_string();
+     let r = process_files(&inputs, &output, &format, f64_param(p, "quality"), "", &|scratch| {
++        scratch.print_spool = s.print_spool.clone();
+         for (id, params) in &steps {
++            crate::source_cmds::check_synchronous(s, id)?;
+             scratch.execute(id, params.clone())?;
+         }
+         Ok(())
+@@ -683,10 +744,18 @@
+     Ok(r)
+ }
+ 
+-fn image_processor(_s: &mut Session, p: &Value) -> Result<Value> {
++pub type DirectoryOutputFn = std::sync::Arc<dyn Fn(&str, &str) -> std::result::Result<String, String> + Send + Sync>;
++
++/// Resolve only the output location. The platform grant never re-enters the session.
++pub(crate) fn directory_output(s: &Session, p: &Value, command: &str) -> Result<String> {
++    let requested = str_param(p, "output", command)?;
++    if let Some(resolve) = &s.directory_output { resolve(command, requested).map_err(EngineError::Other) } else { Ok(requested.to_string()) }
++}
++
++fn image_processor(s: &mut Session, p: &Value) -> Result<Value> {
+     let cmd = "file.scripts.imageProcessor";
+     let inputs = batch_inputs(p, cmd)?;
+-    let output = str_param(p, "output", cmd)?.to_string();
++    let output = directory_output(s, p, cmd)?;
+     let format = p.get("format").and_then(Value::as_str).unwrap_or("jpg").to_string();
+     let fit = match (size_param(p, "width"), size_param(p, "height")) {
+         (None, None) => None,
+--- a/src/fill_cmds.rs
++++ b/src/fill_cmds.rs
+@@ -383,6 +383,8 @@
+     }
+ 
+     #[test]
++    // Preserve the upstream test's false result for NaN; !Range::contains accepts NaN.
++    #[allow(clippy::manual_range_contains)]
+     fn opacity_mode_and_preserve_transparency() {
+         let mut s = session();
+         s.execute("select.rect", json!({"x": 0, "y": 0, "width": 20, "height": 30})).unwrap();
+--- a/src/jobs.rs
++++ b/src/jobs.rs
+@@ -182,6 +182,7 @@
+     started_ms: f64,
+     coalesce: Option<String>,
+     color_restrict: Option<usize>,
++    scope: Option<crate::automation::Scope>,
+     rx: std::sync::mpsc::Receiver<Result<Payload>>,
+     apply: Option<Apply>,
+     #[cfg(not(target_arch = "wasm32"))]
+@@ -214,6 +215,7 @@
+     /// The job a command registered while `spawn` was set (picked up by `start`).
+     pending: Option<Running>,
+     running: Vec<Running>,
++    external: Vec<External>,
+     /// Ended jobs not yet collected by [`Session::poll_jobs`].
+     events: Vec<JobEvent>,
+     /// The last few ended jobs, for `jobs.list`.
+@@ -223,6 +225,12 @@
+     draining: Vec<std::thread::JoinHandle<()>>,
+ }
+ 
++struct External {
++    info: JobInfo,
++    context: JobCtx,
++    started_ms: f64,
++}
++
+ const RECENT: usize = 16;
+ 
+ impl Drop for Jobs {
+@@ -230,6 +238,9 @@
+         // Workers own snapshots only; stop them so they don't burn CPU for a closed session.
+         for r in self.running.iter().chain(self.pending.iter()) {
+             r.ctx.cancel();
++        }
++        for job in &self.external {
++            job.context.cancel();
+         }
+     }
+ }
+@@ -332,6 +343,7 @@
+         started_ms: now_ms(),
+         coalesce: s.coalesce_request.clone(),
+         color_restrict: s.color_restrict,
++        scope: s.automation.permit,
+         rx,
+         apply: Some(erased),
+         #[cfg(not(target_arch = "wasm32"))]
+@@ -488,12 +500,18 @@
+         }
+         #[cfg(not(target_arch = "wasm32"))]
+         self.jobs.draining.retain(|h| !h.is_finished());
+-        std::mem::take(&mut self.jobs.events)
++        let mut events = std::mem::take(&mut self.jobs.events);
++        self.tick_automation(&events);
++        events.extend(std::mem::take(&mut self.jobs.events));
++        events
+     }
+ 
+     /// Block until job `id` ends, apply it, and return its result (the control channel's and
+     /// MCP's default `wait`, and the CLI). `Err(Cancelled)` if it was cancelled.
+     pub fn wait_job(&mut self, id: JobId) -> Result<Value> {
++        if self.is_external_job(id) {
++            return Err(EngineError::Other("this job waits for platform input; poll its completion instead of blocking the UI".into()));
++        }
+         if let Some(i) = self.jobs.running.iter().position(|r| r.id == id) {
+             let job = self.jobs.running.remove(i);
+             let r = job.rx.recv().unwrap_or_else(|_| Err(EngineError::Other(format!("`{}` stopped unexpectedly", job.label))));
+@@ -510,6 +528,10 @@
+     /// Cancel job `id`: it stops at its next check, its result is discarded and the document
+     /// stays unchanged. The document is unlocked at once. False if no such job is running.
+     pub fn cancel_job(&mut self, id: JobId) -> bool {
++        if let Some(job) = self.jobs.external.iter().find(|job| job.info.id == id) {
++            job.context.cancel();
++            return true;
++        }
+         let Some(i) = self.jobs.running.iter().position(|r| r.id == id) else { return false };
+         let job = self.jobs.running.remove(i);
+         job.ctx.cancel();
+@@ -523,7 +545,7 @@
+ 
+     /// Cancel every running job (e.g. before quitting).
+     pub fn cancel_all_jobs(&mut self) {
+-        let ids: Vec<JobId> = self.jobs.running.iter().map(|r| r.id).collect();
++        let ids: Vec<JobId> = self.jobs().iter().map(|r| r.id).collect();
+         for id in ids {
+             self.cancel_job(id);
+         }
+@@ -531,17 +553,28 @@
+ 
+     /// Is any job running? (Cheap: the UI asks every frame.)
+     pub fn has_jobs(&self) -> bool {
+-        !self.jobs.running.is_empty()
++        !self.jobs.running.is_empty() || !self.jobs.external.is_empty()
+     }
+ 
+     /// Running job `id`.
+     pub fn job(&self, id: JobId) -> Option<JobInfo> {
+-        self.jobs.running.iter().find(|r| r.id == id).map(Running::info)
++        self.jobs().into_iter().find(|r| r.id == id)
+     }
+ 
+     /// Running jobs.
+     pub fn jobs(&self) -> Vec<JobInfo> {
+-        self.jobs.running.iter().map(Running::info).collect()
++        self.jobs
++            .running
++            .iter()
++            .map(Running::info)
++            .chain(self.jobs.external.iter().map(|job| {
++                let mut info = job.info.clone();
++                info.progress = job.context.fraction();
++                info.message = job.context.message();
++                info.elapsed_ms = now_ms() - job.started_ms;
++                info
++            }))
++            .collect()
+     }
+ 
+     /// Running jobs followed by the last few that ended (newest last), for `jobs.list`.
+@@ -551,7 +584,7 @@
+ 
+     /// The running job that locks document `doc`, if any.
+     pub fn job_on(&self, doc: DocId) -> Option<JobInfo> {
+-        self.jobs.running.iter().find(|r| r.doc == Some(doc)).map(Running::info)
++        self.jobs().into_iter().find(|r| r.document == Some(doc))
+     }
+ 
+     /// The running job that locks the active document, if any.
+@@ -574,12 +607,16 @@
+             return None;
+         }
+         let job = self.active_job()?;
++        if self.automation.permit.is_some_and(|scope| scope.run == job.id.0) {
++            return None;
++        }
+         Some(format!("“{}” is still running on this document; wait for it to finish or cancel it (Esc)", job.label))
+     }
+ 
+     /// Cancel the jobs editing document `doc` (it is closing).
+     pub(crate) fn cancel_jobs_on(&mut self, doc: DocId) {
+-        let ids: Vec<JobId> = self.jobs.running.iter().filter(|r| r.doc == Some(doc)).map(|r| r.id).collect();
++        let ids: Vec<JobId> =
++            self.jobs().iter().filter(|r| r.document == Some(doc) && self.automation.permit.is_none_or(|scope| scope.run != r.id.0)).map(|r| r.id).collect();
+         for id in ids {
+             self.cancel_job(id);
+         }
+@@ -593,6 +630,15 @@
+         }
+         if let Some(why) = self.job_conflict(id, spec.journal) {
+             return Err(EngineError::Disabled(id.to_string(), why));
++        }
++        if self.automation.enabled && self.automation.permit.is_none() && crate::automation::supports(id) {
++            return self.begin_automation(id, params).map(Started::Job);
++        }
++        if crate::source_cmds::supports(id)
++            && let Some(service) = self.source_file.clone()
++        {
++            let request = crate::source_cmds::capture(self, id, &params)?;
++            return service(request).map(Started::Done);
+         }
+         self.coalesce_request = params.get("coalesce").and_then(Value::as_str).map(str::to_string);
+         // Pixel commands follow the Channels panel target unless the caller names one.
+@@ -623,14 +669,16 @@
+                 Ok(Started::Job(jid))
+             }
+             (Ok(v), None) => {
+-                self.after_command(id, params, spec.journal);
++                if !(self.tree_output.is_some() && crate::tree_output::supports(id) && v.get("pending").and_then(Value::as_bool) == Some(true)) {
++                    self.after_command(id, params, spec.journal);
++                }
+                 Ok(Started::Done(v))
+             }
+         }
+     }
+ 
+     /// Bookkeeping after a command (or a job's apply) succeeded.
+-    fn after_command(&mut self, id: &str, params: Value, journal: bool) {
++    pub(crate) fn after_command(&mut self, id: &str, params: Value, journal: bool) {
+         // A layer-mask view ends when another layer becomes active (#196).
+         if let Some(st) = self.active_mut() {
+             crate::mask_view_cmds::fix(st);
+@@ -640,6 +688,65 @@
+         self.sync_preset_store();
+         if journal && !crate::brush_cmds::coalesce_journal(self, id, &params) {
+             self.journal.push((id.to_string(), params));
++        }
++    }
++
++    pub(crate) fn external_job(&mut self, command: &str, label: &str, document: Option<DocId>) -> Result<(JobId, JobCtx)> {
++        if self.jobs.external.len() >= 8 {
++            return Err(EngineError::Other("finish an automation job before starting another".into()));
++        }
++        self.jobs.next = self.jobs.next.checked_add(1).ok_or_else(|| EngineError::Other("job identifier exhausted".into()))?;
++        let id = JobId(self.jobs.next);
++        let context = JobCtx::new();
++        self.jobs.external.push(External {
++            info: JobInfo {
++                id,
++                command: command.into(),
++                label: label.into(),
++                document,
++                state: "running",
++                progress: 0.0,
++                message: String::new(),
++                elapsed_ms: 0.0,
++                result: None,
++                error: None,
++            },
++            context: context.clone(),
++            started_ms: now_ms(),
++        });
++        Ok((id, context))
++    }
++
++    pub fn is_external_job(&self, id: JobId) -> bool {
++        self.jobs.external.iter().any(|job| job.info.id == id)
++    }
++
++    pub(crate) fn end_external_job(&mut self, id: JobId, outcome: JobOutcome, partial: Option<Value>) {
++        let Some(index) = self.jobs.external.iter().position(|job| job.info.id == id) else { return };
++        let job = self.jobs.external.remove(index);
++        let mut info = job.info;
++        info.elapsed_ms = now_ms() - job.started_ms;
++        match &outcome {
++            JobOutcome::Done(value) => {
++                info.state = "done";
++                info.progress = 1.0;
++                info.result = Some(value.clone());
++            }
++            JobOutcome::Failed(error) => {
++                info.state = "failed";
++                info.error = Some(error.clone());
++                info.result = partial;
++            }
++            JobOutcome::Cancelled => {
++                info.state = "cancelled";
++                info.result = partial;
++            }
++        }
++        self.jobs.events.push(JobEvent { id, command: info.command.clone(), label: info.label.clone(), document: info.document, outcome });
++        self.jobs.recent.push(info);
++        if self.jobs.recent.len() > RECENT {
++            let excess = self.jobs.recent.len() - RECENT;
++            self.jobs.recent.drain(..excess);
+         }
+     }
+ 
+@@ -677,6 +784,8 @@
+         };
+         self.coalesce_request = coalesce.clone();
+         self.color_restrict = *color_restrict;
++        let previous_permit = self.automation.permit;
++        self.automation.permit = job.scope;
+         let r = match apply {
+             Some(f) => std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self, payload)))
+                 .unwrap_or_else(|_| Err(EngineError::Other(format!("`{label}` failed with an internal error (logged); the document is unchanged")))),
+@@ -684,12 +793,20 @@
+         };
+         self.coalesce_request = None;
+         self.color_restrict = None;
++        // A continuation journals/hooks against the step's actual owner, before
++        // restoring the tab the user visited while the worker was pending.
++        if job.scope.is_some() && r.is_ok() {
++            self.after_command(command, params.clone(), *journal);
++        }
++        self.automation.permit = previous_permit;
+         // Keep the user's active document unless the job opened a new one.
+         if target.is_some() && self.active == target {
+             self.active = prev_active.filter(|i| *i < self.docs.len()).or(self.active);
+         }
+         let v = r?;
+-        self.after_command(command, params.clone(), *journal);
++        if job.scope.is_none() {
++            self.after_command(command, params.clone(), *journal);
++        }
+         Ok(v)
+     }
+ 
+@@ -738,7 +855,7 @@
+             enabled: |_| Ok(()),
+             run: |s, p| match p.get("job") {
+                 None | Some(Value::Null) => {
+-                    let n = s.jobs.running.len();
++                    let n = s.jobs().len();
+                     s.cancel_all_jobs();
+                     Ok(json!({"cancelled": n}))
+                 }
+--- a/src/lens_cmds.rs
++++ b/src/lens_cmds.rs
+@@ -351,9 +351,9 @@
+     Ok(json!({"layer": id.0, "identity": cr.is_identity(), "ms": t0.ms()}))
+ }
+ 
+-fn lens_batch(_s: &mut Session, p: &Value) -> Result<Value> {
++fn lens_batch(s: &mut Session, p: &Value) -> Result<Value> {
+     let inputs = crate::file_cmds::batch_inputs(p, LENS_BATCH)?;
+-    let output = crate::file_cmds::str_param(p, "output", LENS_BATCH)?.to_string();
++    let output = crate::file_cmds::directory_output(s, p, LENS_BATCH)?;
+     let format = p.get("format").and_then(Value::as_str).unwrap_or("same").to_string();
+     let mut params = p.clone();
+     if let Value::Object(m) = &mut params {
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -13,6 +13,8 @@
+ pub mod analysis_cmds;
+ pub mod artboard_cmds;
+ pub mod automate_cmds;
++pub mod automation;
++pub mod tree_output;
+ pub mod brush_cmds;
+ pub mod brush_preset_cmds;
+ pub mod build_info;
+@@ -70,6 +72,7 @@
+ pub mod smart_cmds;
+ pub mod smartselect_cmds;
+ pub mod snap;
++pub mod source_cmds;
+ pub mod stamp_cmds;
+ mod timeline_cmds;
+ pub mod transform_cmds;
+@@ -268,6 +271,19 @@
+     /// File menu state: Lock Slices, Image Assets, last Print / Save for Web settings, script
+     /// event log (see `automate_cmds`).
+     pub file_menu: automate_cmds::FileMenuState,
++    /// Optional asynchronous native spooler. The renderer and script-event
++    /// ordering stay in the engine; this service owns immutable PDF publication.
++    pub print_spool: Option<print_cmds::PrintSpoolFn>,
++    /// Resolve a logical directory-command output destination to an exclusive
++    /// platform staging directory. Receives no Session and cannot re-enter it.
++    pub directory_output: Option<file_cmds::DirectoryOutputFn>,
++    /// Publish an immutable multi-file export after system folder authorization.
++    pub tree_output: Option<tree_output::TreeOutputFn>,
++    /// Optional asynchronous file-source service. It receives an immutable
++    /// command/document snapshot; it cannot re-enter this Session.
++    pub source_file: Option<source_cmds::SourceFileFn>,
++    /// Optional resumable command sequences. Unset keeps synchronous desktop semantics.
++    pub automation: automation::Automation,
+     /// Persistent brush preset store (desktop only; `None` keeps presets session-only, as in
+     /// headless and test sessions). See `preset_store`.
+     pub preset_store: Option<preset_store::PresetStore>,
+@@ -343,6 +359,7 @@
+         match self.dispatch(id, params, false)? {
+             jobs::Started::Done(v) => Ok(v),
+             // Not reached: inline dispatch never starts a job. Waiting is still correct.
++            jobs::Started::Job(j) if self.is_external_job(j) => Ok(serde_json::json!({"job":j.0,"pending":true})),
+             jobs::Started::Job(j) => self.wait_job(j),
+         }
+     }
+@@ -407,7 +424,7 @@
+ 
+     pub fn undo(&mut self) -> bool {
+         // A background job is computing from the current state: it must not move under it.
+-        if self.active_job().is_some() {
++        if self.active_job().is_some_and(|job| self.automation.permit.is_none_or(|scope| scope.run != job.id.0)) {
+             return false;
+         }
+         let Some(st) = self.active_mut() else { return false };
+@@ -425,7 +442,7 @@
+     }
+ 
+     pub fn redo(&mut self) -> bool {
+-        if self.active_job().is_some() {
++        if self.active_job().is_some_and(|job| self.automation.permit.is_none_or(|scope| scope.run != job.id.0)) {
+             return false;
+         }
+         let Some(st) = self.active_mut() else { return false };
+--- a/src/notes_cmds.rs
++++ b/src/notes_cmds.rs
+@@ -309,7 +309,7 @@
+         // A PSD with notes (corpus sample, feature `corpus`) appends two more.
+         #[cfg(feature = "corpus")]
+         {
+-            let psd = concat!(env!("CARGO_MANIFEST_DIR"), "/../../corpus/psd/ag-psd/read-write/annotations/src.psd");
++            let psd = concat!(env!("CARGO_MANIFEST_DIR"), "/../../upstream/corpus/psd/ag-psd/read-write/annotations/src.psd");
+             assert!(std::path::Path::new(psd).exists(), "{psd} is missing: run `cargo xtask corpus --all`");
+             s.execute("file.import.notes", json!({"path": psd})).unwrap();
+             assert_eq!(s.active().unwrap().doc.notes.len(), 3);
+--- a/src/plugin_cmds/tests.rs
++++ b/src/plugin_cmds/tests.rs
+@@ -2,7 +2,7 @@
+ use photocraft_geom::Rect;
+ 
+ /// The example Invert plug-in, built from `examples/plugins/invert-rs`.
+-const INVERT: &[u8] = include_bytes!("../../../plugins/tests/fixtures/invert.wasm");
++const INVERT: &[u8] = include_bytes!("../../../../upstream/crates/plugins/tests/fixtures/invert.wasm");
+ const INVERT_ID: &str = "org.photocraft.example.invert";
+ 
+ fn b64(b: &[u8]) -> String {
+--- a/src/print_cmds.rs
++++ b/src/print_cmds.rs
+@@ -69,6 +69,25 @@
+     pub description: Option<String>,
+     pub label: Option<String>,
+ }
++
++/// Immutable engine-rendered input to an asynchronous platform spooler.
++/// The callback receives no Session, so it cannot re-enter engine dispatch.
++pub struct PrintSpool<'a> {
++    pub pdf: &'a [u8],
++    pub document: photocraft_doc::DocId,
++    pub name: &'a str,
++    pub copies: u32,
++    pub printer: Option<&'a str>,
++}
++
++/// Accepted asynchronous submission, never evidence of completed printing.
++pub struct PrintSpoolResult {
++    pub pdf: String,
++    pub request: u64,
++    pub status: String,
++}
++
++pub type PrintSpoolFn = std::sync::Arc<dyn Fn(&PrintSpool<'_>) -> Result<PrintSpoolResult> + Send + Sync>;
+ 
+ fn pdf_string(s: &str) -> String {
+     let mut o = String::from("(");
+@@ -329,7 +348,7 @@
+     let pdf = print_pdf(&page);
+     let output = p.get("output").and_then(Value::as_str).filter(|v| !v.is_empty()).map(str::to_string);
+     let send = p.get("send").and_then(Value::as_bool).unwrap_or(output.is_none());
+-    let pdf_path = match &output {
++    let mut pdf_path = match &output {
+         Some(o) => o.clone(),
+         None => {
+             // Unique per call: concurrent prints of same-named documents must not share a spool file.
+@@ -339,7 +358,6 @@
+             join(&tmp, &format!("{}-print-{}-{n}.pdf", crate::file_cmds::sanitize(&stem(&doc.name)), std::process::id()))
+         }
+     };
+-    write_file(&pdf_path, &pdf)?;
+     let copies = crate::commands::int(p, "copies").unwrap_or(1).clamp(1, 999);
+     let mut argv: Vec<String> = vec!["lp".into()];
+     if let Some(pr) = p.get("printer").and_then(Value::as_str).filter(|v| !v.is_empty()) {
+@@ -352,9 +370,26 @@
+     let dry = p.get("dryRun").and_then(Value::as_bool).unwrap_or(false);
+     let mut sent = false;
+     let mut spool = Value::Null;
+-    if send && !dry {
+-        spool = json!(spool_pdf(&argv)?);
+-        sent = true;
++    let mut pending = None;
++    if send
++        && !dry
++        && let Some(service) = s.print_spool.clone()
++    {
++        let accepted = service(&PrintSpool {
++            pdf: &pdf,
++            document: doc.id,
++            name: &doc.name,
++            copies: copies as u32,
++            printer: p.get("printer").and_then(Value::as_str).filter(|name| !name.is_empty()),
++        })?;
++        pdf_path = accepted.pdf.clone();
++        pending = Some(accepted);
++    } else {
++        write_file(&pdf_path, &pdf)?;
++        if send && !dry {
++            spool = json!(spool_pdf(&argv)?);
++            sent = true;
++        }
+     }
+     let mut remembered = p.clone();
+     if let Some(o) = remembered.as_object_mut() {
+@@ -363,9 +398,13 @@
+     }
+     s.file_menu.last_print = Some(remembered);
+     crate::automate_cmds::fire_event(s, "print");
+-    Ok(
+-        json!({"pdf": pdf_path, "bytes": pdf.len(), "paper": [pw, ph], "imageRect": [x, y, w, h], "scale": scale * 100.0, "copies": copies, "command": if send { json!(argv) } else { Value::Null }, "sent": sent, "spooler": spool, "color": color}),
+-    )
++    let mut result = json!({"pdf": pdf_path, "bytes": pdf.len(), "paper": [pw, ph], "imageRect": [x, y, w, h], "scale": scale * 100.0, "copies": copies, "command": if send && pending.is_none() { json!(argv) } else { Value::Null }, "sent": sent, "spooler": spool, "color": color});
++    if let Some(pending) = pending {
++        result["pending"] = json!(true);
++        result["printRequest"] = json!(pending.request);
++        result["status"] = json!(pending.status);
++    }
++    Ok(result)
+ }
+ 
+ #[cfg(not(target_arch = "wasm32"))]
+@@ -411,6 +450,9 @@
+         Some(f) => return Err(bad(cmd, format!("unknown package format `{f}` (pcraft|psd|psb)"))),
+         None => "pcraft".into(),
+     };
++    if let Some(service) = s.tree_output.clone() {
++        return service(crate::tree_output::capture(s, s.active_index().ok_or(EngineError::NoDocument)?, cmd, p.clone(), false)?);
++    }
+     let folder = join(dir, &crate::file_cmds::sanitize(&name));
+     let links_dir = join(&folder, "Links");
+     // Copy every linked file once; relink the copy of the document to the copies.
+@@ -450,6 +492,16 @@
+     }
+     let out = join(&folder, &format!("{}.{ext}", crate::file_cmds::sanitize(&name)));
+     let pdoc = t.active().ok_or(EngineError::NoDocument)?.doc.clone();
++    let mut pdoc = (*pdoc).clone();
++    if p.get("portableLinks").and_then(Value::as_bool) == Some(true) {
++        for (id, path) in &relinks {
++            if let Some(layer) = pdoc.layer_mut(*id)
++                && let LayerContent::Smart(smart) = &mut layer.content
++            {
++                smart.source = SmartSource::Linked { path: format!("Links/{}", file_name(path)) };
++            }
++        }
++    }
+     let warnings = crate::file_cmds::save_doc(&pdoc, &out, None)?;
+     Ok(json!({"folder": folder, "document": out, "links": copied.iter().map(|(_, t)| t).collect::<Vec<_>>(), "missing": missing, "warnings": warnings}))
+ }
+--- a/src/smart_cmds.rs
++++ b/src/smart_cmds.rs
+@@ -592,12 +592,17 @@
+ fn edit_contents(s: &mut Session, p: &Value) -> Result<Value> {
+     let id = layer_param(s, p)?;
+     let st = s.active().ok_or(EngineError::NoDocument)?;
+-    let parent = st.doc.id;
+     let (name, bytes) = source_bytes(&st.doc.metadata, &smart(&st.doc, id)?.source).ok_or_else(|| other("the smart object's contents are unavailable"))?;
+-    let mut child = decode_source(&name, &bytes)?;
++    edit_contents_bytes(s, p, &name, &bytes)
++}
++
++pub(crate) fn edit_contents_bytes(s: &mut Session, p: &Value, name: &str, bytes: &[u8]) -> Result<Value> {
++    let id = layer_param(s, p)?;
++    let parent = s.active().ok_or(EngineError::NoDocument)?.doc.id;
++    let mut child = decode_source(name, bytes)?;
+     // Bundles keep their document id; each open copy needs its own.
+     child.id = DocId::fresh();
+-    child.name = name;
++    child.name = name.into();
+     let index = s.add_document(child, None);
+     // Admission may replace an ID already owned by another open document.
+     let child_id = s.documents().get(index).ok_or(EngineError::NoDocument)?.doc.id;
+@@ -650,6 +655,10 @@
+ }
+ 
+ fn update_all(s: &mut Session) -> Result<Value> {
++    update_all_from(s, &[], &[])
++}
++
++fn update_all_from(s: &mut Session, sources: &[(LayerId, String)], failed: &[LayerId]) -> Result<Value> {
+     let ids: Vec<LayerId> = s
+         .active()
+         .ok_or(EngineError::NoDocument)?
+@@ -658,17 +667,58 @@
+         .into_iter()
+         .filter(|(_, _, l)| matches!(&l.content, LayerContent::Smart(sm) if matches!(sm.source, SmartSource::Linked { .. })))
+         .map(|(_, _, l)| l.id)
++        .filter(|id| !failed.contains(id))
+         .collect();
+     let mut updated = Vec::new();
++    if ids.is_empty() && !failed.is_empty() {
++        return Ok(json!({"updated":[],"failed":failed.iter().map(|id|id.0).collect::<Vec<_>>()}));
++    }
+     s.edit("Update All Modified Content", |doc, _| {
++        for (id, path) in sources {
++            smart_mut(doc, *id)?.source = SmartSource::Linked { path: path.clone() };
++        }
+         for id in &ids {
++            if failed.contains(id) {
++                continue;
++            }
+             if refresh(doc, *id)? {
+                 updated.push(id.0);
+             }
+         }
+         Ok(())
+     })?;
+-    Ok(json!({"updated": updated}))
++    let mut result = json!({"updated": updated});
++    if !failed.is_empty() {
++        result["failed"] = json!(failed.iter().map(|id| id.0).collect::<Vec<_>>());
++    }
++    Ok(result)
++}
++
++/// Fresh owned paths replace only linked sources, inside the original undoable
++/// refresh. Transforms, masks and smart filters remain in the same layer.
++pub(crate) fn update_from_files(s: &mut Session, p: &Value, sources: &[(LayerId, String)], failed: &[LayerId], all: bool) -> Result<Value> {
++    if all {
++        return update_all_from(s, sources, failed);
++    }
++    let id = layer_param(s, p)?;
++    s.edit("Update Modified Content", |doc, _| {
++        if let Some((_, path)) = sources.iter().find(|(layer, _)| *layer == id) {
++            smart_mut(doc, id)?.source = SmartSource::Linked { path: path.clone() };
++        }
++        refresh_or_fail(doc, id)
++    })?;
++    Ok(json!({"layer": id.0}))
++}
++
++pub(crate) fn embed_fresh(s: &mut Session, p: &Value, name: String, bytes: Vec<u8>) -> Result<Value> {
++    decode_source(&name, &bytes)?;
++    set_source(s, p, "Convert to Embedded", true, |_, _| Ok(SmartSource::Embedded { file_name: name, bytes: Arc::new(bytes) }))
++}
++
++/// Publication already owns these exact source bytes. Commit only the original
++/// source replacement, without writing the file a second time.
++pub(crate) fn link_published(s: &mut Session, p: &Value, path: &str) -> Result<Value> {
++    set_source(s, p, "Convert to Linked", false, |_, _| Ok(SmartSource::Linked { path: path.into() }))
+ }
+ 
+ // ---------- smart filter editing ----------
+--- a/src/source_cmds.rs
++++ b/src/source_cmds.rs
+@@ -0,0 +1,153 @@
++//! Optional asynchronous file-source boundary; no platform UI or URI enters L5.
++
++use crate::{EngineError, Result, Session};
++use photocraft_doc::{Document, LayerId};
++use serde_json::{Value, json};
++use std::sync::Arc;
++
++pub type SourceFileFn = Arc<dyn Fn(SourceCommand) -> Result<Value> + Send + Sync>;
++
++/// Immutable owner/version, captured before a system file operation starts.
++#[derive(Clone)]
++pub struct SourceCommand {
++    pub command: String,
++    pub params: Value,
++    /// Original caller parameters, without completion-only stable layer binding.
++    pub recorded_params: Value,
++    pub document: Arc<Document>,
++    pub revision: u64,
++    pub path: Option<String>,
++    pub layer: Option<LayerId>,
++    pub scope: Option<crate::automation::Scope>,
++}
++
++pub enum SourceResult {
++    Read { path: String, name: String, bytes: Vec<u8> },
++    Refresh { paths: Vec<(LayerId, String)>, failed: Vec<LayerId> },
++    Published(String),
++}
++
++pub fn supports(id: &str) -> bool {
++    matches!(
++        id,
++        "file.revert"
++            | "layer.smartObjects.replaceContents"
++            | "layer.smartObjects.relinkToFile"
++            | "layer.smartObjects.updateModifiedContent"
++            | "layer.smartObjects.updateAllModifiedContent"
++            | "layer.smartObjects.convertToEmbedded"
++            | "layer.smartObjects.editContents"
++            | "layer.smartObjects.exportContents"
++            | "layer.smartObjects.convertToLinked"
++    )
++}
++
++/// Synchronous scripts and scratch batches cannot wait for a system picker or
++/// authorization. Fail the step instead of using an old cache or advancing to
++/// later writes. Sessions without a platform source service keep their behavior.
++pub fn check_synchronous(session: &Session, id: &str) -> Result<()> {
++    if session.source_file.is_some() && supports(id) {
++        return Err(EngineError::Other(format!("`{id}` requires an asynchronous source operation; run it separately before replaying this action")));
++    }
++    Ok(())
++}
++
++pub(crate) fn capture(session: &Session, id: &str, params: &Value) -> Result<SourceCommand> {
++    let layer =
++        if matches!(id, "file.revert" | "layer.smartObjects.updateAllModifiedContent") { None } else { Some(crate::commands::layer_param(session, params)?) };
++    let state = session.active().ok_or(EngineError::NoDocument)?;
++    let recorded_params = params.clone();
++    let mut params = if params.is_object() { params.clone() } else { json!({}) };
++    if let Some(layer) = layer {
++        params["layer"] = json!(layer.0);
++    }
++    Ok(SourceCommand {
++        command: id.into(),
++        params,
++        recorded_params,
++        document: state.doc.clone(),
++        revision: state.revision,
++        path: state.path.clone(),
++        layer,
++        scope: session.automation.permit,
++    })
++}
++
++impl Session {
++    /// Apply a completed source request to its original document/version. The
++    /// original handlers own decoding/history; pending admission never journals
++    /// an edit that has not happened. Invalid responses cannot fall back to disk.
++    pub fn complete_source(&mut self, request: &SourceCommand, response: SourceResult) -> Result<Value> {
++        if request.scope.is_some() {
++            return self.complete_automation_source(request, response);
++        }
++        self.complete_source_direct(request, response)
++    }
++
++    pub(crate) fn complete_source_direct(&mut self, request: &SourceCommand, response: SourceResult) -> Result<Value> {
++        let target = self
++            .docs
++            .iter()
++            .position(|state| state.doc.id == request.document.id)
++            .ok_or_else(|| EngineError::Other("the original document was closed".into()))?;
++        if self
++            .docs
++            .get(target)
++            .is_none_or(|state| state.revision != request.revision || state.path != request.path || !Arc::ptr_eq(&state.doc, &request.document))
++        {
++            return Err(EngineError::Other("the original document changed while the file operation was pending".into()));
++        }
++        let previous = self.active().map(|state| state.doc.id);
++        self.set_active(target);
++        let result = if let Some(why) = crate::commands::find(&request.command).and_then(|spec| self.job_conflict(&request.command, spec.journal)) {
++            Err(EngineError::Disabled(request.command.clone(), why))
++        } else {
++            self.apply_source(request, response)
++        };
++        let all_failed = result.as_ref().is_ok_and(|value| {
++            value.get("updated").and_then(Value::as_array).is_some_and(Vec::is_empty)
++                && value.get("failed").and_then(Value::as_array).is_some_and(|failed| !failed.is_empty())
++        });
++        if result.is_ok()
++            && !all_failed
++            && let Some(spec) = crate::commands::find(&request.command)
++        {
++            self.after_command(&request.command, request.recorded_params.clone(), spec.journal);
++        }
++        // Edit Contents deliberately activates its new child when its initiating
++        // document is still active; tab switches during a picker are preserved.
++        if (request.command != "layer.smartObjects.editContents" || previous != Some(request.document.id) || result.is_err())
++            && let Some(index) = previous.and_then(|id| self.docs.iter().position(|state| state.doc.id == id))
++        {
++            self.set_active(index);
++        }
++        result
++    }
++
++    fn apply_source(&mut self, request: &SourceCommand, response: SourceResult) -> Result<Value> {
++        match (request.command.as_str(), response) {
++            ("file.revert", SourceResult::Read { name, bytes, .. }) => crate::file_cmds::revert_bytes(self, &name, &bytes),
++            ("layer.smartObjects.editContents", SourceResult::Read { name, bytes, .. }) => {
++                crate::smart_cmds::edit_contents_bytes(self, &request.params, &name, &bytes)
++            }
++            ("layer.smartObjects.replaceContents" | "layer.smartObjects.relinkToFile", SourceResult::Read { path, .. }) => {
++                let mut params = request.params.clone();
++                params["path"] = json!(path);
++                let spec = crate::commands::find(&request.command).ok_or_else(|| EngineError::UnknownCommand(request.command.clone()))?;
++                (spec.run)(self, &params)
++            }
++            ("layer.smartObjects.updateModifiedContent", SourceResult::Refresh { paths, failed }) => {
++                crate::smart_cmds::update_from_files(self, &request.params, &paths, &failed, false)
++            }
++            ("layer.smartObjects.updateAllModifiedContent", SourceResult::Refresh { paths, failed }) => {
++                crate::smart_cmds::update_from_files(self, &request.params, &paths, &failed, true)
++            }
++            ("layer.smartObjects.convertToEmbedded", SourceResult::Read { name, bytes, .. }) => {
++                crate::smart_cmds::embed_fresh(self, &request.params, name, bytes)
++            }
++            ("layer.smartObjects.exportContents", SourceResult::Published(path)) => Ok(json!({"path":path})),
++            ("layer.smartObjects.convertToLinked", SourceResult::Published(path)) => crate::smart_cmds::link_published(self, &request.params, &path),
++            _ => Err(EngineError::Other("source completion does not match its command".into())),
++        }
++    }
++}
+--- a/src/tree_output.rs
++++ b/src/tree_output.rs
+@@ -0,0 +1,70 @@
++//! Optional publication of an immutable multi-file export. No platform URI enters L5.
++
++use crate::{EngineError, Result, Session};
++use photocraft_doc::Document;
++use serde_json::{Value, json};
++use std::sync::Arc;
++
++pub type TreeOutputFn = Arc<dyn Fn(Request) -> Result<Value> + Send + Sync>;
++
++#[derive(Clone)]
++pub struct Request {
++    pub command: String,
++    pub params: Value,
++    pub document: Arc<Document>,
++    pub revision: u64,
++    pub path: Option<String>,
++    /// Automatic assets are an independent export after a successful project save.
++    pub automatic: bool,
++}
++
++pub fn supports(command: &str) -> bool {
++    matches!(command, "file.export.saveForWebLegacy" | "file.generate.imageAssets" | "file.package")
++}
++
++pub fn capture(session: &Session, index: usize, command: &str, params: Value, automatic: bool) -> Result<Request> {
++    if session.automation.permit.is_some() {
++        return Err(EngineError::Other(format!("`{command}` requires asynchronous directory authorization; this script step cannot continue yet")));
++    }
++    let state = session.documents().get(index).ok_or(EngineError::NoDocument)?;
++    Ok(Request { command: command.into(), params, document: state.doc.clone(), revision: state.revision, path: state.path.clone(), automatic })
++}
++
++/// Run the original encoder in an isolated snapshot. Only destination parameters
++/// change; the caller's document, dirty marker and command parameters stay intact.
++pub fn encode(request: &Request, directory: &str) -> Result<Value> {
++    let mut session = Session::new();
++    session.add_document((*request.document).clone(), request.path.clone());
++    let mut params = request.params.clone();
++    params["dir"] = json!(directory);
++    if request.command == "file.export.saveForWebLegacy" {
++        params.as_object_mut().map(|fields| fields.remove("path"));
++    }
++    if request.command == "file.generate.imageAssets" {
++        params["on"] = json!(true);
++    }
++    if request.command == "file.package" {
++        params["portableLinks"] = json!(true);
++    }
++    session.execute(&request.command, params)
++}
++
++impl Session {
++    /// Publication is the command's completion. Admission never records a
++    /// successful export, and switching tabs cannot journal against another doc.
++    pub fn complete_tree_output(&mut self, request: &Request) {
++        if request.automatic {
++            return;
++        }
++        let previous = self.active().map(|state| state.doc.id);
++        if let Some(index) = self.documents().iter().position(|state| state.doc.id == request.document.id) {
++            self.set_active(index);
++            if let Some(spec) = crate::commands::find(&request.command) {
++                self.after_command(&request.command, request.params.clone(), spec.journal);
++            }
++        }
++        if let Some(index) = previous.and_then(|id| self.documents().iter().position(|state| state.doc.id == id)) {
++            self.set_active(index);
++        }
++    }
++}
+--- a/src/web_cmds.rs
++++ b/src/web_cmds.rs
+@@ -710,6 +710,13 @@
+     let cmd = "file.export.saveForWebLegacy";
+     let st = WebSettings::from_params(p, cmd)?;
+     let d = s.active().ok_or(EngineError::NoDocument)?;
++    if (!d.doc.slices.is_empty() || p.get("dir").and_then(Value::as_str).is_some())
++        && let Some(service) = s.tree_output.clone()
++    {
++        let request = crate::tree_output::capture(s, s.active_index().ok_or(EngineError::NoDocument)?, cmd, p.clone(), false)?;
++        s.file_menu.last_web = Some(p.clone());
++        return service(request);
++    }
+     let doc = d.doc.clone();
+     let (wdoc, sx, sy) = web_document(&doc, p, &st)?;
+     let buf = photocraft_compose::flatten(&wdoc);
+@@ -1135,6 +1142,10 @@
+     }
+     match dir {
+         Some(dir) if !cfg!(target_arch = "wasm32") => {
++            if let Some(service) = s.tree_output.clone() {
++                let request = crate::tree_output::capture(s, s.active_index().ok_or(EngineError::NoDocument)?, "file.generate.imageAssets", p.clone(), false)?;
++                return service(request);
++            }
+             let (files, errors) = generate_assets(&d.doc, &dir);
+             Ok(json!({"enabled": true, "dir": dir, "files": files, "errors": errors}))
+         }
+@@ -1149,6 +1160,12 @@
+         return None;
+     }
+     let dir = assets_dir(d.path.as_deref()?);
++    if let Some(service) = s.tree_output.clone() {
++        return Some(match crate::tree_output::capture(s, index, "file.generate.imageAssets", json!({"on": true}), true).and_then(|request| service(request)) {
++            Ok(value) => value,
++            Err(error) => json!({"errors":[{"error":error.to_string()}]}),
++        });
++    }
+     let (files, errors) = generate_assets(&d.doc, &dir);
+     Some(json!({"dir": dir, "files": files, "errors": errors}))
+ }
+--- a/tests/photoshop_oracles.rs
++++ b/tests/photoshop_oracles.rs
+@@ -82,7 +82,7 @@
+ 
+ #[test]
+ fn photoshop_oracles_rerendered() {
+-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/photoshop");
++    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../upstream/corpus/photoshop");
+     assert!(root.is_dir(), "{} is missing: run `cargo xtask corpus --all`", root.display());
+     let mut files = Vec::new();
+     collect(&root, &mut files);
+--- a/tests/prefs_usage.rs
++++ b/tests/prefs_usage.rs
+@@ -91,7 +91,7 @@
+ 
+ #[test]
+ fn every_preference_is_read_or_hidden() {
+-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
++    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../upstream");
+     let prefs_rs = std::fs::read_to_string(root.join("crates/engine/src/prefs.rs")).unwrap();
+     let mut files = Vec::new();
+     rust_sources(&root.join("crates"), &mut files);

@@ -1,0 +1,33 @@
+# PhotoCraft #13 own-app fault diagnostics — source-only
+
+2026-10-08. This is a separate source batch after immutable #12. It adds only AppFaultObserver.ets, EntryAbility lifecycle integration and a dedicated production Node test. It does not change Index, DocumentBridge, Rust, overlays, native code, manifest, signing configuration, clipboard, file publishing or the original UI. No HAP, OHOS release, signing, installation, device interaction or screenshots were performed for this batch.
+
+## Verified SDK contract
+
+Installed API26 PerformanceAnalysisKit exports hiAppEvent from @ohos.hiviewdfx.hiAppEvent. Watcher.onReceive, OS domain and APP_CRASH/APP_FREEZE constants are public since API11; addWatcher/removeWatcher are public, have no systemApi or permission requirement. The implementation uses the SDK FAULT filter and both event names. The callback independently checks OS domain, group/info name, event type, and rejects an explicit bundle_name other than the app's fixed bundle. The OS subscription is app-local: event delivery uses the app sandbox. See the [official event-subscription mechanism](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/dfx/hiappevent-intro.md).
+
+Registration happens in onCreate before editor loading, as recommended by the [official ArkTS crash guide](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/dfx/hiappevent-watcher-crash-events-arkts.md). Registration is a synchronous SDK operation and may incur startup IO. A thrown error or null result is contained and produces a best-effort watcherUnavailable marker. onDestroy removes the same watcher, outside its callback. Repeated destruction does not remove a newer ability owner's watcher.
+
+## Minimal retained metadata
+
+The observer writes to the ability filesDir's PhotoCraft/Diagnostics directory. It retains only fixed schema/version/kind, observation and observer-start timestamps, OS event timestamp, allowlisted crash type/JS error type, foreground boolean, bounded pid/process lifetime, numeric NativeCrash signal/code, numeric RSS and log-over-limit boolean. Missing or malformed fields become null/unknown. Native signal fields are documented in the [official crash event schema](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/dfx/hiappevent-watcher-crash-events.md); freeze metadata follows the [official freeze schema](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/dfx/hiappevent-watcher-freeze-events.md).
+
+No raw exception message, stack, hilog, external_log path/content, process/bundle/document name, URI, fault address, screenshot or UI content is retained. The helper emits no hilog/stdout, reads no external_log, has no export/data retrieval method, network operation or sharing operation, and does not enable extra OS page/stack/log collection policy. This is a classification aid, not a replacement for an independently authorized full OS fault investigation. Existing SDK-generated fault logs have their own OS retention policy; this helper neither copies nor deletes them.
+
+Lifecycle records contain fixed created/watcherReady/watcherUnavailable/foreground/background/destroyed kinds. They record ability observations, not a guarantee that process teardown completed. The received event's time is distinct from the current observer start time, so a replayed prior-run fault is not presented as a fault of the current launch.
+
+## Bounds and failure behavior
+
+One process-wide serialized writer is shared across ability owners. At most 32 records wait plus one active IO; callback inspection is capped at 64 events/groups, and deduplication retains at most 64 fixed primitive keys. Duplicate keys are an approximate same-event guard, not an authoritative fault count. Dropped/failed records are counted in subsequent metadata when possible.
+
+There are 16 fault ring slots and 8 separate lifecycle slots, each at most 2048 ASCII bytes, and one fixed pending file: at most 25 helper-owned files and 50KiB of content. Names never derive from event data. Before creation/write, each private directory and any existing destination/temp file is checked with lstat; links and nonregular files are refused. The temp file uses NOFOLLOW, verifies a regular fd, handles short writes, fsyncs, closes and renames. The serialized queue prevents concurrent temp-file writes. Full disk, failed mkdir/open/write/fsync/rename, unsupported IO, malformed callback payloads and watcher API failure are contained. Pending writes are best effort and are not awaited by ability launch/foreground/background/destroy. A never-settling SDK IO leaves only the bounded queue, not unbounded tasks.
+
+## Limits and validation
+
+Missed callbacks can be replayed on the next addWatcher after relaunch ([official constraints](https://github.com/openharmony/docs/blob/master/zh-cn/application-dev/dfx/hiappevent-intro.md)). Real delivery requires OS collection and a subsequent launch; destroyed or force-killed processes cannot be expected to complete async lifecycle writes. Normal Exit, user/process termination and SIGKILL need not emit APP_CRASH or APP_FREEZE. Absent records are inconclusive; this patch does not assert a cause for #11 Choose Another disappearance. APP_KILLED is a separate public API20 event and remains outside this batch's subscription scope.
+
+14 production Node contracts PASS: own filters; subscription/removal failures; hostile/malformed event rejection; privacy allowlist; numeric bounds; overlap queue limit; scan/dedup/ring bound; replacement owner lifecycle; storage failure; real temporary sandbox file writes; injected SDK mkdir/write/fsync/rename errors; directory/destination/temp links; EntryAbility ordering; no diagnostic export/network/log APIs. These execute the actual .ets production code through the SDK TypeScript compiler and mocked typed SDK operations over host filesystem fixtures. They do not claim device OS-event delivery.
+
+Actual installed API26 isolated default@CompileArkTS PASS: 5.420s, whole task 8.056s. The first compiler run caught constructor parameter-property declarations; explicit class fields fixed both, and the final run passed. Compiler warnings about potentially throwing SDK methods remain in this and existing adapters, with runtime catches in this helper. No native, signing or device tasks ran.
+
+Evidence: logs/regression/app-fault-observer-20261008 contains final tests/compiler output, exact before/after EntryAbility and new sources, minimal source archive, source patch, SDK declaration fingerprints and facts. Root should combine this source batch with the separate async-run #13 freeze before a future package; #12 immutable artifacts and device claims remain unchanged.

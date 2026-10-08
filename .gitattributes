@@ -1,0 +1,2 @@
+# Unified diff context markers preserve blank lines and TSV indentation.
+*.patch -whitespace

@@ -1,0 +1,1937 @@
+--- a/src/actions.rs
++++ b/src/actions.rs
+@@ -54,6 +54,7 @@
+ pub fn play(app: &mut PhotocraftApp, idx: usize) -> Result<usize, String> {
+     let steps = app.ui.actions.list.get(idx).map(|a| a.steps.clone()).ok_or("no such action")?;
+     for (i, (id, p)) in steps.iter().enumerate() {
++        photocraft_engine::source_cmds::check_synchronous(&app.session, id).map_err(|e| format!("Step {} ({id}) failed: {e}", i + 1))?;
+         app.run(id, p.clone()).map_err(|e| format!("Step {} ({id}) failed: {e}", i + 1))?;
+     }
+     Ok(steps.len())
+@@ -128,6 +129,7 @@
+         let recording = app.ui.actions.recording.is_some();
+         if crate::icons::button(ui, "square", 24.0, false, tl!("Stop playing/recording")).clicked() {
+             stop_recording(app);
++            app.session.cancel_actions();
+         }
+         let (r, rec) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
+         if rec.hovered() {
+@@ -152,6 +154,23 @@
+         }
+     });
+     if let Some(i) = play_idx {
++        if app.session.automation.enabled {
++            let action = app.ui.actions.list.get(i).cloned();
++            if let Some(action) = action {
++                match app.session.start_action(&action.name, action.steps) {
++                    Ok(_) => {
++                        app.ui.status = format!("Playing {}…", action.name);
++                        app.ui.status_error = false;
++                        ui.ctx().request_repaint();
++                    }
++                    Err(error) => {
++                        app.ui.status = error.to_string();
++                        app.ui.status_error = true;
++                    }
++                }
++            }
++            return;
++        }
+         match play(app, i) {
+             Ok(n) => app.ui.status = format!("Played {n} steps"),
+             Err(e) => {
+--- a/src/analysis_ui.rs
++++ b/src/analysis_ui.rs
+@@ -159,7 +159,9 @@
+             r
+         }
+         "file.import.notes" => {
+-            let (name, bytes) = app.services.pick_open.as_mut().and_then(|f| f())?;
++            let Some((name, bytes)) = app.pick_open_for(id) else {
++                return Some(Ok(Value::Null));
++            };
+             let r = photocraft_engine::notes_cmds::import_notes_from(&mut app.session, &name, &bytes).map_err(|e| e.to_string());
+             if r.is_ok() {
+                 app.ui.analysis.notes = true;
+--- a/src/canvas.rs
++++ b/src/canvas.rs
+@@ -1017,66 +1017,87 @@
+ fn pro_tabs(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
+     let t = crate::theme::Tokens::get(ui.ctx());
+     let active = app.session.active_index().filter(|_| app.jobs.focus.is_none());
+-    let (mut activate, mut close) = (None, None);
++    let (mut activate, mut close, mut focus_open, mut cancel_open) = (None, None, None, None);
+     let (strip, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 26.0), Sense::hover());
+     ui.painter().rect_filled(strip, 0.0, t.tab_strip);
++    // Reuse the original dock-tab fitting policy: the active tab stays visible,
++    // and every other document remains reachable from the same strip's overflow menu.
++    let mut tabs: Vec<_> = app
++        .session
++        .documents()
++        .iter()
++        .enumerate()
++        .map(|(i, st)| {
++            let zoom = app.ui.views.get(i).map_or(100.0, |v| v.zoom * 100.0);
++            // Photoshop: "name @ 50% (Layer 1, RGB/8)", "(Layer 1, Layer Mask/8)" when the mask is targeted;
++            // the Background layer's name is omitted.
++            let active_layer = st.active_layer.and_then(|id| st.doc.layer(id)).filter(|l| !(l.name == "Background" && l.locks.transparency));
++            let is_active_doc = app.session.active_index() == Some(i);
++            let mask = is_active_doc && app.ui.mask_target && active_layer.is_some_and(|l| l.mask.is_some());
++            let model = if mask { tl!("Layer Mask").to_string() } else { mode_label(&st.doc).to_string() };
++            let layer = active_layer.map(|l| format!("{}, ", l.name)).unwrap_or_default();
++            let title = format!("{} @ {}% ({layer}{model}/{}){}", st.doc.name, fmt_zoom(zoom), st.doc.depth.bits(), if st.is_dirty() { "*" } else { "" });
++
++            (Some(i), None, title, 0.0)
++        })
++        .collect();
++    tabs.extend(
++        crate::jobs_ui::open_tabs(app)
++            .into_iter()
++            .map(|(job, name, frac)| (None, Some(job), format!("{name} ({} {:.0}%)", tl!("Opening…"), frac * 100.0), frac)),
++    );
++    let selected =
++        tabs.iter().position(|(document, job, _, _)| document.is_some() && *document == active || job.is_some() && *job == app.jobs.focus).unwrap_or(0);
++    let widths: Vec<_> =
++        tabs.iter().map(|(_, _, title, _)| ui.painter().layout_no_wrap(title.clone(), egui::FontId::proportional(11.5), t.text).size().x + 42.0).collect();
++    let fit = crate::tab_strip::fit(&widths, selected, strip.width(), 120.0, 20.0);
+     let mut x = strip.left();
+-    for (i, st) in app.session.documents().iter().enumerate() {
+-        let zoom = app.ui.views.get(i).map_or(100.0, |v| v.zoom * 100.0);
+-        // Photoshop: "name @ 50% (Layer 1, RGB/8)", "(Layer 1, Layer Mask/8)" when the mask is targeted;
+-        // the Background layer's name is omitted.
+-        let active_layer = st.active_layer.and_then(|id| st.doc.layer(id)).filter(|l| !(l.name == "Background" && l.locks.transparency));
+-        let is_active_doc = app.session.active_index() == Some(i);
+-        let mask = is_active_doc && app.ui.mask_target && active_layer.is_some_and(|l| l.mask.is_some());
+-        let model = if mask { tl!("Layer Mask").to_string() } else { mode_label(&st.doc).to_string() };
+-        let layer = active_layer.map(|l| format!("{}, ", l.name)).unwrap_or_default();
+-        let title = format!("{} @ {}% ({layer}{model}/{}){}", st.doc.name, fmt_zoom(zoom), st.doc.depth.bits(), if st.is_dirty() { "*" } else { "" });
+-        let g = ui.painter().layout_no_wrap(title, egui::FontId::proportional(11.5), t.text);
+-        let r = Rect::from_min_size(egui::pos2(x, strip.top()), egui::vec2(g.size().x + 42.0, strip.height()));
+-        let resp = ui.interact(r, ui.id().with(("ptab", i)), Sense::click());
+-        let sel = Some(i) == active;
++    for &(tab, width) in &fit.shown {
++        let Some((document, job, title, frac)) = tabs.get(tab) else { continue };
++        let r = Rect::from_min_size(egui::pos2(x, strip.top()), egui::vec2(width, strip.height()));
++        let identity =
++            document.and_then(|index| app.session.documents().get(index)).map(|doc| format!("doc:{}", doc.doc.id.0)).unwrap_or_else(|| format!("job:{job:?}"));
++        let resp = ui.interact(r, ui.id().with(("document-tab", &identity)), Sense::click());
++        let sel = document.is_some() && *document == active || job.is_some() && *job == app.jobs.focus;
+         if sel {
+             ui.painter().rect_filled(r, 0.0, t.chrome);
+         } else if resp.hovered() {
+             ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.35));
+         }
+         ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0, t.separator));
++        if job.is_some() {
++            crate::jobs_ui::tab_underline(ui, r, *frac, &t);
++        }
+         let xr = Rect::from_center_size(egui::pos2(r.left() + 13.0, r.center().y), egui::vec2(14.0, 14.0));
+-        let xresp = ui.interact(xr, ui.id().with(("ptabx", i)), Sense::click());
++        let xresp = ui.interact(xr, ui.id().with(("document-tab-close", &identity)), Sense::click());
+         crate::icons::paint(ui, xr, "x", 10.0, if xresp.hovered() { t.text } else { t.text_faint });
++        let g = crate::tab_strip::elided(ui, title, egui::FontId::proportional(11.5), t.text, (width - 42.0).max(1.0));
+         ui.painter().galley_with_override_text_color(egui::pos2(r.left() + 26.0, r.center().y - g.size().y / 2.0), g, if sel { t.text } else { t.text_faint });
+-        if xresp.clicked() {
+-            close = Some(i);
+-        } else if resp.clicked() {
+-            activate = Some(i);
++        if xresp.on_hover_text(if job.is_some() { tl!("Cancel opening") } else { tl!("Close") }).clicked() {
++            close = *document;
++            cancel_open = *job;
++        } else if resp.on_hover_text(title).clicked() {
++            activate = *document;
++            focus_open = *job;
+         }
+         x = r.right();
+     }
+-    // Files opening in the background (#210): "name (Opening… 45%)" with a progress underline.
+-    let (mut focus_open, mut cancel_open) = (None, None);
+-    for (job, name, frac) in crate::jobs_ui::open_tabs(app) {
+-        let title = format!("{name} ({} {:.0}%)", tl!("Opening…"), frac * 100.0);
+-        let g = ui.painter().layout_no_wrap(title, egui::FontId::proportional(11.5), t.text);
+-        let r = Rect::from_min_size(egui::pos2(x, strip.top()), egui::vec2(g.size().x + 42.0, strip.height()));
+-        let resp = ui.interact(r, ui.id().with(("ptabjob", job.0)), Sense::click());
+-        let sel = app.jobs.focus == Some(job);
+-        if sel {
+-            ui.painter().rect_filled(r, 0.0, t.chrome);
+-        } else if resp.hovered() {
+-            ui.painter().rect_filled(r, 0.0, t.hover.gamma_multiply(0.35));
+-        }
+-        ui.painter().line_segment([r.right_top(), r.right_bottom()], Stroke::new(1.0, t.separator));
+-        crate::jobs_ui::tab_underline(ui, r, frac, &t);
+-        let xr = Rect::from_center_size(egui::pos2(r.left() + 13.0, r.center().y), egui::vec2(14.0, 14.0));
+-        let xresp = ui.interact(xr, ui.id().with(("ptabjobx", job.0)), Sense::click());
+-        crate::icons::paint(ui, xr, "x", 10.0, if xresp.hovered() { t.text } else { t.text_faint });
+-        ui.painter().galley_with_override_text_color(egui::pos2(r.left() + 26.0, r.center().y - g.size().y / 2.0), g, if sel { t.text } else { t.text_faint });
+-        if xresp.on_hover_text(tl!("Cancel opening")).clicked() {
+-            cancel_open = Some(job);
+-        } else if resp.clicked() {
+-            focus_open = Some(job);
+-        }
+-        x = r.right();
++    if !fit.overflow.is_empty() {
++        let r = Rect::from_min_size(egui::pos2(x, strip.top()), egui::vec2(20.0, strip.height()));
++        let resp = ui.interact(r, ui.id().with("document-tab-overflow"), Sense::click());
++        crate::icons::paint(ui, r, "chevrons-right", 12.0, t.text_dim);
++        let resp = resp.on_hover_text(tl!("Documents"));
++        egui::Popup::menu(&resp).show(|ui| {
++            for &tab in &fit.overflow {
++                if let Some((document, job, title, _)) = tabs.get(tab)
++                    && ui.button(title).clicked()
++                {
++                    activate = *document;
++                    focus_open = *job;
++                    ui.close();
++                }
++            }
++        });
+     }
+     open_tab_clicks(app, activate, focus_open, cancel_open);
+     if let Some(i) = close {
+@@ -1210,8 +1231,9 @@
+     ui.add_space(4.0);
+     let mut open = None;
+     for path in recent {
+-        let name = crate::file_open::display_name(path);
+-        let folder = std::path::Path::new(path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
++        let info = app.recent_file_info(path);
++        let name = info.name;
++        let folder = info.location;
+         let (row, resp) = ui.allocate_exact_size(egui::vec2(width, HOME_RECENT_ROW), Sense::click());
+         if resp.hovered() {
+             ui.painter().rect_filled(row, t.radius_sm, t.hover);
+@@ -1227,12 +1249,12 @@
+             let fg = crate::tab_strip::elided(ui, &folder, egui::FontId::proportional(11.5), t.text_faint, folder_max);
+             ui.painter().galley(egui::pos2(row.right() - 10.0 - fg.size().x, row.center().y - fg.size().y / 2.0), fg, t.text_faint);
+         }
+-        if resp.on_hover_text(path).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
++        if resp.on_hover_text(info.tooltip).on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
+             open = Some(path.clone());
+         }
+     }
+     if let Some(path) = open
+-        && let Err(e) = app.open_path(&path)
++        && let Err(e) = app.open_recent(&path)
+     {
+         app.open_failed(&crate::file_open::display_name(&path), &e);
+     }
+--- a/src/chrome_ui.rs
++++ b/src/chrome_ui.rs
+@@ -112,6 +112,7 @@
+     let t = Tokens::get(ui.ctx());
+     let (Some(st), Some(i)) = (app.session.active(), app.session.active_index()) else {
+         ui.label(RichText::new(tl!("No document")).color(t.text_dim));
++        status_message(app, ui);
+         return;
+     };
+     let text = status_info_text(&st.doc, &app.ui.chrome.status_info, tl!(app.ui.tool.label()), &profile_name(&st.doc));
+@@ -138,6 +139,12 @@
+             }
+         }
+     });
++    status_message(app, ui);
++}
++
++fn status_message(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
++    crate::folder_ui::recovery_button(app, ui);
++    let t = Tokens::get(ui.ctx());
+     if !app.ui.status.is_empty() {
+         let (r, _) = ui.allocate_exact_size(vec2(17.0, 16.0), Sense::hover());
+         ui.painter().line_segment([r.center_top(), r.center_bottom()], Stroke::new(1.0, t.separator));
+--- a/src/cjk_fonts.rs
++++ b/src/cjk_fonts.rs
+@@ -284,7 +284,7 @@
+         g.get_or_insert_with(|| {
+             let dir = std::env::temp_dir().join(format!("photocraft-cjk-{}", std::process::id()));
+             std::fs::create_dir_all(&dir).unwrap();
+-            std::fs::write(dir.join("font.ttf"), include_bytes!("../../../assets/fonts/Inter-Regular.ttf")).unwrap();
++            std::fs::write(dir.join("font.ttf"), include_bytes!("../../../upstream/assets/fonts/Inter-Regular.ttf")).unwrap();
+             std::fs::write(dir.join("empty.ttf"), b"").unwrap();
+             dir
+         })
+@@ -355,7 +355,7 @@
+ 
+     #[test]
+     fn vertical_metrics_parse_and_reject_garbage() {
+-        let (asc, desc, gap) = vertical_metrics(include_bytes!("../../../assets/fonts/Inter-Regular.ttf"), 0).unwrap();
++        let (asc, desc, gap) = vertical_metrics(include_bytes!("../../../upstream/assets/fonts/Inter-Regular.ttf"), 0).unwrap();
+         assert!((asc - 1984.0 / 2048.0).abs() < 1e-4 && (desc + 494.0 / 2048.0).abs() < 1e-4 && gap == 0.0);
+         for bad in [&b""[..], b"ttcf", b"ttcf\0\0\0\0\0\0\0\0\xff\xff\xff\xff", b"\0\x01\0\0\0\xff\0\0\0\0\0\0"] {
+             assert!(vertical_metrics(bad, 0).is_none());
+--- a/src/dialogs.rs
++++ b/src/dialogs.rs
+@@ -107,6 +107,23 @@
+                     });
+                     ui.add_space(10.0);
+                     ui.weak("egui · wgpu · photocraft-engine");
++                    ui.add_space(10.0);
++                    crate::widgets::hairline(ui);
++                    ui.add_space(8.0);
++                    ui.label(egui::RichText::new(tl!("HarmonyOS port")).strong());
++                    ui.label(tl!("This version is a native HarmonyOS port of PhotoCraft."));
++                    ui.horizontal(|ui| {
++                        ui.label(tl!("Port author:"));
++                        if ui.link("TennousuAthena").on_hover_text("https://github.com/TennousuAthena").clicked() {
++                            crate::links::open(app, ui.ctx(), "https://github.com/TennousuAthena");
++                        }
++                    });
++                    ui.horizontal_wrapped(|ui| {
++                        ui.label(tl!("Port repository:"));
++                        if ui.link("TennousuAthena/OH-photocraft").on_hover_text("https://github.com/TennousuAthena/OH-photocraft").clicked() {
++                            crate::links::open(app, ui.ctx(), "https://github.com/TennousuAthena/OH-photocraft");
++                        }
++                    });
+                 }
+                 DialogKind::Command if crate::fill_ui::owns(&fields) => crate::fill_ui::body(app, ui, &mut fields),
+                 DialogKind::Command if crate::rasterize_prompt::owns(&fields) => crate::rasterize_prompt::body(ui, &fields),
+@@ -119,7 +136,7 @@
+                 DialogKind::Command if fields.contains_key("__sizing") => crate::sizing::body(ui, &mut fields),
+                 DialogKind::Command if crate::adjust_dialog::owns(&fields) => crate::adjust_dialog::body(app, ui, &mut fields),
+                 DialogKind::Command if fields.contains_key("__filter") => crate::filter_dialog::body(ui, &mut fields),
+-                DialogKind::Command if fields.contains_key("__form") => crate::view_cmds::form_body(ui, &mut fields),
++                DialogKind::Command if fields.contains_key("__form") => crate::view_cmds::form_body_with_resources(app, ui, d.id, &mut fields),
+                 DialogKind::Command => {}
+                 DialogKind::LayerStyle => crate::layer_style::body(ui, &mut fields),
+                 DialogKind::Error => {
+@@ -143,9 +160,12 @@
+                     } else {
+                         crate::file_ui::ok_label(&d.fields).unwrap_or(tl!("OK"))
+                     };
+-                    if crate::widgets::primary_button(ui, ok_label, 84.0).clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+-                        outcome = Some(true);
+-                    }
++                    ui.add_enabled_ui(crate::folder_ui::ready(app, &fields), |ui| {
++                        let clicked = crate::widgets::primary_button(ui, ok_label, 84.0).clicked();
++                        if ui.is_enabled() && (clicked || ui.input(|i| i.key_pressed(egui::Key::Enter))) {
++                            outcome = Some(true);
++                        }
++                    });
+                     if d.kind == DialogKind::Command && crate::prefs_ui::is_preferences(&fields) {
+                         let changed = crate::prefs_ui::preferences_changed(app, &fields);
+                         apply_requested = ui.add_enabled_ui(changed, |ui| crate::widgets::secondary_button(ui, tl!("Apply"), 84.0)).inner.clicked();
+@@ -223,6 +243,13 @@
+ 
+ /// Confirm a dialog: run its action and close it. Used by the OK button and by automation.
+ pub fn confirm(app: &mut PhotocraftApp, id: u64) -> Result<Value, String> {
++    if let Some(dialog) = app.ui.dialogs.iter().find(|dialog| dialog.id == id)
++        && !crate::folder_ui::ready(app, &dialog.fields)
++    {
++        app.ui.status = "Choose a folder and wait for its import before confirming".into();
++        app.ui.status_error = true;
++        return Err(app.ui.status.clone());
++    }
+     let d = app.ui.close_dialog(id).ok_or_else(|| format!("no dialog {id}"))?;
+     match d.kind {
+         DialogKind::NewDocument => {
+--- a/src/discard_ui.rs
++++ b/src/discard_ui.rs
+@@ -79,6 +79,10 @@
+ }
+ 
+ /// Called once per frame: holds back a window close request while there is unsaved work.
++pub(crate) fn native_close_pending(app: &PhotocraftApp) -> bool {
++    app.discard.as_ref().is_some_and(|prompt| prompt.id == EXIT)
++}
++
+ pub fn guard_window_close(app: &mut PhotocraftApp, ctx: &egui::Context) {
+     if app.allow_close || !ctx.input(|i| i.viewport().close_requested()) {
+         return;
+@@ -119,7 +123,7 @@
+     let Some(i) = index_of(app, doc) else { return false };
+     app.session.set_active(i);
+     match crate::menus::invoke_unguarded(app, ctx, "file.save", json!({})) {
+-        Ok(_) => true,
++        Ok(_) => !app.has_pending_save(doc.0),
+         // Backing out of the file dialog is the user's choice, not an error.
+         Err(e) if e == "cancelled" => false,
+         Err(e) => {
+@@ -127,6 +131,27 @@
+             app.ui.status_error = true;
+             false
+         }
++    }
++}
++
++/// Resume a parked close/revert only after external publication completed for
++/// its current document and no edits arrived after encoding.
++pub(crate) fn published(app: &mut PhotocraftApp, ctx: &egui::Context, document: u64, revision: u64) {
++    let waiting = app.discard.as_ref().and_then(|prompt| prompt.docs.first()).is_some_and(|id| id.0 == document);
++    let clean = app.session.documents().iter().find(|st| st.doc.id.0 == document).is_some_and(|st| st.revision == revision && !st.is_dirty());
++    if waiting && clean {
++        advance(app, ctx);
++    }
++}
++
++/// Invoke the current prompt's Save action. A deferred platform save keeps the
++/// action parked until `published` confirms that exact document and revision.
++pub(crate) fn save_current(app: &mut PhotocraftApp, ctx: &egui::Context) {
++    let Some(doc) = app.discard.as_ref().and_then(|p| p.docs.first()).copied() else {
++        return;
++    };
++    if save(app, ctx, doc) {
++        advance(app, ctx);
+     }
+ }
+ 
+@@ -173,8 +198,10 @@
+     cancel |= modal.should_close();
+     if cancel {
+         app.discard = None;
+-    } else if discard_it || (save_it && save(app, ctx, doc)) {
++    } else if discard_it {
+         advance(app, ctx);
++    } else if save_it {
++        save_current(app, ctx);
+     }
+ }
+ 
+--- a/src/export_dialog.rs
++++ b/src/export_dialog.rs
+@@ -204,6 +204,12 @@
+ /// from File › Export › Export Preferences (engine `file.export.quickExport`). On the web (no
+ /// file system) it falls back to a PNG download through the export service.
+ pub fn quick_export_png(app: &mut PhotocraftApp) -> Result<Value, String> {
++    if let Some(export) = app.services.quick_export.as_mut() {
++        let result = export(&mut app.session)?;
++        app.ui.status = format!("Exported {}", result["path"].as_str().unwrap_or_default());
++        app.ui.status_error = false;
++        return Ok(result);
++    }
+     if !cfg!(target_arch = "wasm32") {
+         let prefs = app.session.prefs().export.clone();
+         let fmt = serde_json::to_value(prefs.quick_export_format).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_else(|| "png".into());
+--- a/src/file_ui.rs
++++ b/src/file_ui.rs
+@@ -59,7 +59,9 @@
+             app.session.active()?;
+             json!({"dialog": open_print(app)})
+         }
+-        "file.export.exportPreferences" => return crate::prefs_ui::invoke(app, ctx, "edit.preferences.export", &json!({})),
++        "file.export.exportPreferences" => {
++            return crate::prefs_ui::invoke(app, ctx, "edit.preferences.export", &json!({}));
++        }
+         "file.automate.contactSheetII" => form(
+             app,
+             id,
+@@ -88,7 +90,9 @@
+             form(app, id, "Image Statistics", json!({"mode": "median", "input": dir, "align": false}), json!({"mode": modes}))
+         }
+         "file.scripts.browse" => {
+-            let (name, bytes) = app.services.pick_open.as_mut().and_then(|f| f())?;
++            let Some((name, bytes)) = app.pick_open_for(id) else {
++                return Some(Ok(Value::Null));
++            };
+             let r = app.run(id, json!({"script": String::from_utf8_lossy(&bytes)}));
+             if r.is_ok() {
+                 app.ui.status = format!("Ran script {name}");
+@@ -497,6 +501,10 @@
+     let mut p = params(f);
+     let doc = app.session.active().ok_or("no document")?.doc.clone();
+     let has_slices = !doc.slices.is_empty();
++    if has_slices && app.services.tree_output {
++        p["html"] = json!(b(f, "html", true));
++        return app.run("file.export.saveForWebLegacy", p);
++    }
+     if p.get("path").is_none() && p.get("dir").is_none() {
+         let st = WebSettings::from_params(&p, "file.export.saveForWebLegacy").map_err(|e| e.to_string())?;
+         let base = photocraft_doc::slices::base_name(&doc);
+@@ -511,7 +519,9 @@
+         }
+     }
+     let r = app.run("file.export.saveForWebLegacy", p)?;
+-    app.ui.status = format!("Saved for Web: {} file(s)", r["files"].as_array().map_or(0, Vec::len));
++    if r.get("pending").and_then(Value::as_bool) != Some(true) {
++        app.ui.status = format!("Saved for Web: {} file(s)", r["files"].as_array().map_or(0, Vec::len));
++    }
+     Ok(r)
+ }
+ 
+@@ -713,7 +723,9 @@
+ 
+ fn print_confirm(app: &mut PhotocraftApp, f: &Map<String, Value>) -> Result<Value, String> {
+     let r = app.run("file.print", params(f))?;
+-    app.ui.status = if r["sent"] == json!(true) {
++    app.ui.status = if let Some(status) = r["status"].as_str() {
++        status.into()
++    } else if r["sent"] == json!(true) {
+         format!("Sent to the printer ({})", r["spooler"].as_str().unwrap_or(""))
+     } else {
+         format!("Printed to {}", r["pdf"].as_str().unwrap_or(""))
+--- a/src/folder_ui.rs
++++ b/src/folder_ui.rs
+@@ -0,0 +1,204 @@
++//! Optional asynchronous folder selection in the original command forms.
++
++use crate::PhotocraftApp;
++use serde_json::{Map, Value, json};
++
++#[derive(Clone)]
++pub struct Request {
++    pub dialog: u64,
++    pub generation: u64,
++    pub command: String,
++    pub field: String,
++    pub document: Option<u64>,
++    pub original: Value,
++}
++
++pub type BrowseFn = Box<dyn FnMut(Request) -> Result<(), String>>;
++
++pub fn recovery_button(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
++    let retained = app.services.folder_recoveries.as_ref().map(|list| list()).unwrap_or_default();
++    if retained.is_empty() {
++        return;
++    }
++    let button = ui.button(tl!("Recover folder outputs…"));
++    egui::Popup::menu(&button).show(|ui| {
++        ui.set_max_width(430.0);
++        ui.label(tl!("Retained folder outputs"));
++        ui.label(tl!("Retry publishes the retained files without processing them again."));
++        for record in retained {
++            ui.separator();
++            ui.label(if record.unknown_failures {
++                crate::i18n::fmt(crate::i18n::t("{label}: {files} retained files"), &[("label", &record.label), ("files", &record.files.to_string())])
++            } else {
++                crate::i18n::fmt(crate::i18n::t("{label}: {files} files, {failed} inputs failed"), &[("label", &record.label), ("files", &record.files.to_string()), ("failed", &record.failed.to_string())])
++            });
++            if record.unknown_failures {
++                ui.label(tl!("Original input failure details are unavailable."));
++            }
++            if record.partial {
++                ui.label(tl!("External output may already exist. Retrying creates another copy."));
++            }
++            ui.horizontal(|ui| {
++                for (label, choose) in [(tl!("Retry"), false), (tl!("Choose another folder…"), true)] {
++                    if ui.button(label).clicked() {
++                        let result = app
++                            .services
++                            .recover_folder
++                            .as_mut()
++                            .ok_or_else(|| "Folder recovery is unavailable".to_string())
++                            .and_then(|recover| recover(record.id, choose));
++                        match result {
++                            Ok(()) => {
++                                app.ui.status = crate::i18n::t("Preparing retained folder output…").into();
++                                app.ui.status_error = false;
++                                ui.close();
++                            }
++                            Err(error) => {
++                                app.ui.status = error;
++                                app.ui.status_error = true;
++                            }
++                        }
++                    }
++                }
++            });
++        }
++    });
++}
++
++pub fn field(command: &str) -> Option<&'static str> {
++    match command {
++        "file.scripts.loadFilesIntoStack" => Some("paths"),
++        "file.automate.contactSheetII" | "file.scripts.statistics" | "file.scripts.imageProcessor" | "file.automate.batch" | "file.automate.lensCorrection" => {
++            Some("input")
++        }
++        _ => None,
++    }
++}
++
++pub fn output_command(command: &str) -> bool {
++    matches!(command, "file.scripts.imageProcessor" | "file.automate.batch" | "file.automate.lensCorrection")
++}
++
++pub fn applies(app: &PhotocraftApp, fields: &Map<String, Value>, key: &str) -> bool {
++    (app.services.browse_folder.is_some() && fields.get("__command").and_then(Value::as_str).and_then(field) == Some(key))
++        || (app.services.browse_folder_destination.is_some() && key == "output" && fields.get("__command").and_then(Value::as_str).is_some_and(output_command))
++}
++
++pub fn generation_key(key: &str) -> &'static str {
++    if key == "output" { "__folder_output_generation" } else { "__folder_generation" }
++}
++pub fn pending_key(key: &str) -> &'static str {
++    if key == "output" { "__folder_output_pending" } else { "__folder_pending" }
++}
++pub fn cancel_key(key: &str) -> &'static str {
++    if key == "output" { "__folder_output_cancel" } else { "__folder_cancel" }
++}
++pub fn progress_key(key: &str) -> &'static str {
++    if key == "output" { "__folder_output_progress" } else { "__folder_progress" }
++}
++pub fn ready_key(key: &str) -> &'static str {
++    if key == "output" { "__folder_output_ready" } else { "__folder_ready" }
++}
++
++pub fn ready(app: &PhotocraftApp, fields: &Map<String, Value>) -> bool {
++    let Some(key) = fields.get("__command").and_then(Value::as_str).and_then(field) else {
++        return true;
++    };
++    let input_ready = !applies(app, fields, key)
++        || (fields.get("__folder_pending") != Some(&json!(true))
++            && fields.get("__folder_ready") == Some(&json!(true))
++            && fields.get(key).and_then(Value::as_array).is_some_and(|files| !files.is_empty()));
++    let output_ready = !applies(app, fields, "output")
++        || (fields.get("__folder_output_pending") != Some(&json!(true))
++            && fields.get("__folder_output_ready") == Some(&json!(true))
++            && fields.get("output").and_then(Value::as_str).is_some_and(|handle| !handle.is_empty()));
++    input_ready && output_ready
++}
++
++fn request_fields(app: &mut PhotocraftApp, dialog: u64, fields: &mut Map<String, Value>, key: &str) -> Result<(), String> {
++    let command = fields.get("__command").and_then(Value::as_str).ok_or("This form has no command")?.to_string();
++    if !applies(app, fields, key) {
++        return Err("This form does not accept a folder".into());
++    }
++    let generation = fields.get(generation_key(key)).and_then(Value::as_u64).unwrap_or(0).checked_add(1).ok_or("Folder selection generation exhausted")?;
++    let request = Request {
++        dialog,
++        generation,
++        command,
++        field: key.into(),
++        document: app.session.active().map(|doc| doc.doc.id.0),
++        original: fields.get(key).cloned().ok_or("The input field is missing")?,
++    };
++    let hook = if key == "output" { app.services.browse_folder_destination.as_mut() } else { app.services.browse_folder.as_mut() };
++    hook.ok_or("Folder selection is unavailable")?(request)?;
++    fields.insert(generation_key(key).into(), json!(generation));
++    fields.insert(pending_key(key).into(), json!(true));
++    fields.remove(cancel_key(key));
++    fields.remove(progress_key(key));
++    Ok(())
++}
++
++/// The same operation used by the form's Browse button and integration tests.
++pub fn request(app: &mut PhotocraftApp, dialog: u64) -> Result<(), String> {
++    let mut fields = app.ui.dialogs.iter().find(|d| d.id == dialog).ok_or("The input form is closed")?.fields.clone();
++    let key = fields.get("__command").and_then(Value::as_str).and_then(field).ok_or("This form does not accept a folder")?;
++    request_fields(app, dialog, &mut fields, key)?;
++    app.ui.dialog_mut(dialog).ok_or("The input form is closed")?.fields = fields;
++    Ok(())
++}
++
++pub fn request_destination(app: &mut PhotocraftApp, dialog: u64) -> Result<(), String> {
++    let mut fields = app.ui.dialogs.iter().find(|d| d.id == dialog).ok_or("The input form is closed")?.fields.clone();
++    request_fields(app, dialog, &mut fields, "output")?;
++    app.ui.dialog_mut(dialog).ok_or("The input form is closed")?.fields = fields;
++    Ok(())
++}
++
++pub fn row(app: &mut PhotocraftApp, ui: &mut egui::Ui, dialog: u64, fields: &mut Map<String, Value>, key: &str) {
++    let pending = fields.get(pending_key(key)) == Some(&json!(true));
++    let count = fields.get(key).and_then(Value::as_array).map_or(0, Vec::len);
++    ui.horizontal(|ui| {
++        if pending {
++            if let Some(progress) = fields.get(progress_key(key)).and_then(Value::as_str) {
++                ui.label(progress);
++            } else {
++                ui.label(tl!("Selecting folder…"));
++            }
++            if crate::widgets::secondary_button(ui, tl!("Cancel"), 72.0).clicked() {
++                fields.insert(cancel_key(key).into(), json!(true));
++            }
++        } else {
++            ui.label(if key == "output" && fields.get(ready_key(key)) == Some(&json!(true)) {
++                tl!("Selected output folder").to_string()
++            } else if count == 0 {
++                tl!("Choose a folder").to_string()
++            } else {
++                crate::i18n::fmt(crate::i18n::t("{count} image files"), &[("count", &count.to_string())])
++            });
++            if crate::widgets::secondary_button(ui, tl!("Browse…"), 84.0).clicked()
++                && let Err(error) = request_fields(app, dialog, fields, key)
++            {
++                app.ui.status = error;
++                app.ui.status_error = true;
++            }
++        }
++    });
++}
++
++pub fn has_progress(app: &mut PhotocraftApp) -> bool {
++    app.services.folder_progress.as_mut().is_some_and(|progress| progress(false).is_some())
++}
++
++pub fn status_progress(app: &mut PhotocraftApp, ui: &mut egui::Ui) -> bool {
++    let Some(label) = app.services.folder_progress.as_mut().and_then(|progress| progress(false)) else {
++        return false;
++    };
++    ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
++    if crate::widgets::secondary_button(ui, tl!("Cancel"), 72.0).clicked()
++        && let Some(progress) = app.services.folder_progress.as_mut()
++    {
++        let _ = progress(true);
++    }
++    ui.label(label);
++    true
++}
+--- a/src/i18n/cs.tsv
++++ b/src/i18n/cs.tsv
+@@ -1996,3 +1996,9 @@
+ 	Opening…	Otevírání…
+ 	Reading…	Načítání…
+ 	Working…	Zpracování…
++
++# HarmonyOS port credits
++	HarmonyOS port	Port pro HarmonyOS
++	Port author:	Autor portu:
++	Port repository:	Repozitář portu:
++	This version is a native HarmonyOS port of PhotoCraft.	Tato verze je nativním portem PhotoCraft pro HarmonyOS.
+--- a/src/i18n/es.tsv
++++ b/src/i18n/es.tsv
+@@ -2071,3 +2071,9 @@
+ 
+ # Command-id override: under Edit > Purge a bare "Deshacer" reads as an action, not the history.
+ @id	edit.purge.undo	Historial de deshacer
++
++# HarmonyOS port credits
++	HarmonyOS port	Versión para HarmonyOS
++	Port author:	Autor de la adaptación:
++	Port repository:	Repositorio de la adaptación:
++	This version is a native HarmonyOS port of PhotoCraft.	Esta versión es una adaptación nativa de PhotoCraft para HarmonyOS.
+--- a/src/i18n/ja.tsv
++++ b/src/i18n/ja.tsv
+@@ -1986,3 +1986,9 @@
+ 	Opening…	開いています…
+ 	Reading…	読み込み中…
+ 	Working…	処理中…
++
++# HarmonyOS port credits
++	HarmonyOS port	HarmonyOS 移植版
++	Port author:	移植作者：
++	Port repository:	移植版リポジトリ：
++	This version is a native HarmonyOS port of PhotoCraft.	このバージョンは PhotoCraft の HarmonyOS 向けネイティブ移植版です。
+--- a/src/i18n/mod.rs
++++ b/src/i18n/mod.rs
+@@ -74,7 +74,7 @@
+     LangInfo { code: "en", name: "English", source: "", plural: plural_one_other, complete_menus: false, catalog: OnceLock::new() },
+     LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
+     LangInfo {
+-        code: "zh-hans", name: "简体中文", source: include_str!("zh-hans.tsv"), plural: plural_none, complete_menus: false, catalog: OnceLock::new()
++        code: "zh-hans", name: "简体中文", source: include_str!("zh-hans.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new()
+     },
+     // Traditional Chinese in the vocabulary used in Taiwan; `zh-TW`, `zh-HK`, `zh-MO` and `zh-Hant-*`
+     // locales all resolve here (see `candidates`).
+@@ -175,8 +175,24 @@
+     cands.iter().find_map(|c| Lang::from_code(c))
+ }
+ 
+-/// The system language (cached). English when it can't be determined.
++/// A native host's current system language, independent of the per-frame UI language.
++/// The sentinel preserves the desktop locale detection when no host supplies a locale.
++static HOST_SYSTEM: AtomicUsize = AtomicUsize::new(usize::MAX);
++
++/// Update the system language supplied by a native host. Unsupported locales use English.
++/// This can be called before creating the UI, and does not change an explicit user preference.
++pub fn set_system_language(tag: &str) {
++    let lang = lang_from_tag(tag).unwrap_or(Lang::EN);
++    let index = LANGUAGES.iter().position(|l| l.code == lang.code()).unwrap_or(0);
++    HOST_SYSTEM.store(index, Ordering::Relaxed);
++}
++
++/// The system language. Native host updates take effect immediately; desktop detection is cached.
++/// English is used when the language can't be determined.
+ pub fn system_lang() -> Lang {
++    if let Some(language) = LANGUAGES.get(HOST_SYSTEM.load(Ordering::Relaxed)) {
++        return Lang(language);
++    }
+     // Tests drive the UI by its English labels whatever the developer's locale is.
+     if cfg!(test) {
+         return Lang::EN;
+@@ -304,6 +320,10 @@
+         assert_eq!(lang_from_tag("zh-Hant"), Some(ZH()));
+         assert_eq!(lang_from_tag("zh-Hant-TW"), Some(ZH()));
+         assert_eq!(lang_from_tag("zh-Hant-HK"), Some(ZH()));
++        // A script explicitly selected by the system has priority over its region.
++        assert_eq!(lang_from_tag("zh-Hant-CN"), Some(ZH()));
++        assert_eq!(lang_from_tag("zh-Hans-TW"), Lang::from_code("zh-hans"));
++        assert_eq!(lang_from_tag("zh-Hans-HK"), Lang::from_code("zh-hans"));
+         // Simplified Chinese locales never pick up the Traditional catalog: they resolve to `zh-hans`.
+         for tag in ["zh-CN", "zh_CN.UTF-8", "zh_SG", "zh-Hans", "zh-Hans-CN", "zh"] {
+             assert_ne!(lang_from_tag(tag), Some(ZH()), "{tag}");
+@@ -335,6 +355,7 @@
+         assert_eq!(Lang::from_pref("JA"), JA());
+         assert_eq!(Lang::from_pref("zh-hant"), ZH());
+         assert_eq!(Lang::from_pref("ZH-Hant"), ZH());
++        assert_eq!(Lang::from_pref("zh-hans"), Lang::from_code("zh-hans").expect("zh-hans registered"));
+         assert_eq!(Lang::from_pref("en"), Lang::EN);
+         // `auto` and unknown codes follow the system (English under test).
+         assert_eq!(Lang::from_pref("auto"), Lang::EN);
+--- a/src/i18n/ru.tsv
++++ b/src/i18n/ru.tsv
+@@ -2264,3 +2264,9 @@
+ 	Opening…	Открытие…
+ 	Reading…	Чтение…
+ 	Working…	Обработка…
++
++# HarmonyOS port credits
++	HarmonyOS port	Версия для HarmonyOS
++	Port author:	Автор портирования:
++	Port repository:	Репозиторий порта:
++	This version is a native HarmonyOS port of PhotoCraft.	Эта версия — нативный порт PhotoCraft для HarmonyOS.
+--- a/src/i18n/zh-hans.tsv
++++ b/src/i18n/zh-hans.tsv
+@@ -1897,3 +1897,215 @@
+ 	Brush picker	画笔选择器
+ 	Erase	擦除
+ 	Right click with painting tools	使用绘画工具时右键单击
++
++# Additional current UI labels and platform-neutral shortcut hints.
++	Add a mask  (from the selection; {key} inverts)	添加蒙版（基于选区；{key} 反相）
++	Add to selection  ({key})	添加到选区（{key}）
++	Add vector mask	添加矢量蒙版
++	Align with layer	与图层对齐
++	Anti-aliasing method	消除锯齿方式
++	Applies at next launch.	下次启动时应用。
++	Apply the pen's tilt and rotation to the tip shape	将笔的倾斜和旋转应用到笔尖形状
++	Brush Projection	画笔投影
++	Brush Settings…  (F5): every option of this brush	画笔设置…（F5）：此画笔的所有选项
++	Brush name	画笔名称
++	CPU (no GPU acceleration)	CPU（无 GPU 加速）
++	Cancel opening	取消打开
++	Cancelled opening {name}	已取消打开 {name}
++	Cancelled {label}	已取消 {label}
++	Centre the gradient (offset 0, 0)	将渐变居中（偏移 0, 0）
++	Click the first point or press {key} to close · Esc cancels	单击起点或按 {key} 闭合 · Esc 取消
++	Click to add a point · drag off or {key}-click or Delete to remove	单击添加点 · 拖离、按 {key} 单击或按 Delete 移除
++	Click to apply, {key}-click to clear overrides, double-click for Style Options	单击应用，按 {key} 单击清除覆盖设置，双击打开样式选项
++	Click to sample the foreground colour  ·  {key}-click for background	单击取样前景色 · 按 {key} 单击取样背景色
++	Click to zoom in  ·  {key}-click to zoom out  ·  drag right/left to zoom in/out	单击放大 · 按 {key} 单击缩小 · 向右/向左拖动以放大/缩小
++	Click: corner · Drag: smooth · Click first point: close · {key} finish · Esc cancel	单击：角点 · 拖动：平滑点 · 单击起点：闭合 · {key} 完成 · Esc 取消
++	Clone source {n} ({key}-click with Clone Stamp to set)	仿制源 {n}（使用仿制图章时按 {key} 单击以设置）
++	Collapse group  ({key}-click: all groups)	折叠组（按 {key} 单击：所有组）
++	Commit Perspective Warp ({key})	应用透视变形（{key}）
++	Commit Puppet Warp ({key})	应用操控变形（{key}）
++	Commit any current edits ({key})	应用当前所有编辑（{key}）
++	Commit current crop operation  ({key})	应用当前裁剪操作（{key}）
++	Commit transform ({key})	应用变换（{key}）
++	Commit warp ({key})	应用变形（{key}）
++	Create Warped Text	创建变形文字
++	Create a new layer	创建新图层
++	Create new brush preset from the current settings	根据当前设置创建新画笔预设
++	Create new path	创建新路径
++	Delete Brush	删除画笔
++	Delete path	删除路径
++	Delete vector mask	删除矢量蒙版
++	Diameter:	直径：
++	DirectX 12	DirectX 12
++	Esc to cancel	按 Esc 取消
++	Expand group  ({key}-click: all groups)	展开组（按 {key} 单击：所有组）
++	Fill Layer	填充图层
++	Fill path with foreground color	用前景色填充路径
++	GPU backend	GPU 后端
++	Gradient	渐变
++	Gradient Options	渐变选项
++	Graphics	图形
++	Grid view	网格视图
++	Group Layer	组图层
++	Group name	组名称
++	Hardness:	硬度：
++	Hide the layer's effects  ({key}-click: all layers)	隐藏图层效果（按 {key} 单击：所有图层）
++	Horizontal type	横排文字
++	Intersect with selection  ({key})	与选区相交（{key}）
++	Link the mask to the layer	将蒙版链接到图层
++	List view	列表视图
++	Load path as a selection	将路径载入为选区
++	Lock: keep these settings when picking another preset	锁定：选择其他预设时保留这些设置
++	Make work path from selection	从选区生成工作路径
++	Metal	Metal
++	Mix	混合
++	Mix Jitter	混合抖动
++	Mixer Brush	混合器画笔
++	More panels	更多面板
++	New document…	新建文档…
++	No brush presets	没有画笔预设
++	No path to make a selection from: draw one with the Pen tool or select one in the Paths panel.	没有可用于创建选区的路径：请使用钢笔工具绘制路径，或在路径面板中选择一个路径。
++	Off: the speed of the pointer sets the spacing	关闭：由指针速度决定间距
++	OpenGL	OpenGL
++	Opening {name}	正在打开 {name}
++	Opening {name}…	正在打开 {name}…
++	Opening…	正在打开…
++	Pixel Layer	像素图层
++	Rasterize Fill Content	栅格化填充内容
++	Rasterize Smart Object	栅格化智能对象
++	Reading…	正在读取…
++	Rename Brush…	重命名画笔…
++	Reset Alignment	重置对齐
++	Reset GPU Backend	重置 GPU 后端
++	Search commands	搜索命令
++	Select a type layer to edit its character and paragraph settings.	选择文字图层以编辑其字符和段落设置。
++	Shape Layer	形状图层
++	Show Guides	显示参考线
++	Show the layer mask as an overlay	以叠加方式显示图层蒙版
++	Show the layer's effects  ({key}-click: all layers)	显示图层效果（按 {key} 单击：所有图层）
++	Smart Object Layer	智能对象图层
++	Source: not set ({key}-click with Clone Stamp)	源：未设置（使用仿制图章时按 {key} 单击）
++	Stroke path with brush	用画笔描边路径
++	Subtract from selection  ({key})	从选区中减去（{key}）
++	System Info	系统信息
++	System Info…	系统信息…
++	Text color	文字颜色
++	The current gradient (pick one in Window › Gradients)	当前渐变（在“窗口 › 渐变”中选择）
++	These settings aren't available in PhotoCraft yet.	PhotoCraft 尚未提供这些设置。
++	Tilt Scale	倾斜缩放
++	Toggle the Brush Settings panel  (F5)	切换画笔设置面板（F5）
++	Toggle visibility	切换可见性
++	Type Layer	文字图层
++	Type Options	文字选项
++	Unlink the mask from the layer	取消蒙版与图层的链接
++	Unlock: picking a preset replaces these settings	解锁：选择预设时替换这些设置
++	Use tablet pressure	使用绘图板压力
++	Vertical type	直排文字
++	Vulkan	Vulkan
++	Wet	潮湿
++	Wetness Jitter	潮湿抖动
++	Working…	处理中…
++	{key} to subtract	按 {key} 以减去
++	{key}-click to set the source	按 {key} 单击以设置源
++	↑↓ navigate   {key} run   esc close	↑↓ 导航   {key} 运行   esc 关闭
++@plural	{n} layer|{n} layers	{n} 个图层
++
++# OHOS folder workflows and automatic language selection.
++	Choose a folder	选择文件夹
++	Choose another folder…	选择其他文件夹…
++	Documents	文档
++	External output may already exist. Retrying creates another copy.	目标位置可能已有输出文件。重试会创建另一份副本。
++	Original input failure details are unavailable.	无法获取原始输入的失败详情。
++	Recover folder outputs…	恢复文件夹输出…
++	Retained folder outputs	保留的文件夹输出
++	Retry	重试
++	Retry publishes the retained files without processing them again.	重试会将保留的文件保存到目标位置，无需重新处理。
++	Selected output folder	已选择输出文件夹
++	Selecting folder…	正在选择文件夹…
++	Preparing retained folder output…	正在准备保留的文件夹输出…
++	{label}: {files} retained files	{label}：{files} 个保留文件
++	{label}: {files} files, {failed} inputs failed	{label}：{files} 个文件，{failed} 个输入失败
++	{count} image files	{count} 个图像文件
++	Auto (follow system)	自动（跟随系统）
++	Follow system language	跟随系统语言
++
++# Native OHOS import, folder processing and printing status.
++	Folder import cancellation requested	已请求取消文件夹导入
++	Folder selection cancelled	已取消选择文件夹
++	Importing folder: {done} / {total} MiB	正在导入文件夹：{done} / {total} MiB
++	Selected {count} image files	已选择 {count} 个图像文件
++	Folder import failed; choose the folder again or retry	文件夹导入失败；请重新选择文件夹或重试
++	{invalid} retained folder output records could not be verified; their files were preserved	无法验证 {invalid} 条保留的文件夹输出记录；文件已保留
++	Retained folder outputs can be recovered from the status bar	可从状态栏恢复保留的文件夹输出
++	Choosing a folder for retained output…	正在为保留的输出选择文件夹…
++	Preparing {command} output…	正在准备{command}输出…
++	Publishing {files} processed files…	正在保存 {files} 个已处理文件到目标位置…
++	Waiting to cancel output selection…	正在等待取消输出文件夹选择…
++	Batch cancelled; output retained but its recovery record could not be stored: {error}	批处理已取消；输出已保留，但无法保存恢复记录：{error}
++	Folder export cancelled; processed files retained	文件夹导出已取消；已处理文件已保留
++	Cancelling folder export…	正在取消文件夹导出…
++	Recovery folder selection cancelled; output retained	恢复文件夹选择已取消；输出已保留
++	Output folder selection cancelled	已取消选择输出文件夹
++	Output folder selected	已选择输出文件夹
++	{command} cancelled	{command}已取消
++	Folder processing failed; output material was retained	文件夹处理失败；输出内容已保留
++	Processing batch steps…	正在处理批处理步骤…
++	Publishing processed files: {done} / {total} MiB	正在保存已处理文件到目标位置：{done} / {total} MiB
++	Published {files} processed files; {failed} inputs failed	已保存 {files} 个已处理文件；{failed} 个输入失败
++	Published {files} retained files; original input failure details unavailable	已保存 {files} 个保留文件；无法获取原始输入的失败详情
++	; internal output was retained because cleanup failed	；清理失败，内部输出已保留
++	{status}; {files} processed files retained; {failed} inputs failed{partial}	{status}；{files} 个已处理文件已保留；{failed} 个输入失败{partial}
++	Folder export cancelled	文件夹导出已取消
++	; partial external output may remain	；目标位置可能保留了部分输出
++	Batch	批处理
++	Lens Correction	镜头校正
++	Image Processor	图像处理器
++	The image could not be processed; check its format and available storage	无法处理图像；请检查格式和可用存储空间
++	{count} inputs could not be processed:	无法处理 {count} 个输入：
++	Input image	输入图像
++	Processing failed	处理失败
++	{name}: {error}	{name}：{error}
++	And {count} more failed inputs	还有 {count} 个输入失败
++	Folder export failed; check authorization and available storage	文件夹导出失败；请检查授权和可用存储空间
++	Publishing retained folder output…	正在保存保留的文件夹输出到目标位置…
++	Waiting to publish PDF	正在等待保存 PDF 到目标位置
++	PDF rendered for dry run; not submitted to a printer	试运行 PDF 已渲染；未提交到打印机
++	Waiting for system printing; confirm printer and copy count in the system dialog	正在等待系统打印；请在系统对话框中确认打印机和份数
++	System printing request accepted; final job state is unconfirmed	系统打印请求已接受；最终任务状态尚未确认
++	System print job is blocked and can resume	系统打印任务暂停，可继续
++	Print status monitoring failed; job result is unknown	打印状态监控失败；任务结果未知
++	System print job completed	系统打印任务已完成
++	System print job failed	系统打印任务失败
++	System print job cancelled	系统打印任务已取消
++	System print request was rejected	系统打印请求被拒绝
++	{status}: {error}	{status}：{error}
++	Batch cancelled	批处理已取消
++
++# Native file save, export and Smart Object workflow status.
++	Saved destination history could not be restored: {error}; choose a destination again	无法恢复已保存的目标位置记录：{error}；请重新选择目标位置
++	Choose a file to open	选择要打开的文件
++	Waiting to publish {name}	正在等待保存 {name} 到目标位置
++	Placed {name}	已置入 {name}
++	Opened {name}	已打开 {name}
++	Saved {name}	已保存 {name}
++	Exported {name}	已导出 {name}
++	File operation cancelled	文件操作已取消
++	File operation failed	文件操作失败
++	The file operation failed	文件操作失败
++	Saved {name}; destination history could not be stored: {error}	已保存 {name}；无法保存目标位置记录：{error}
++	Linked {name}	已链接 {name}
++	Updated {name}	已更新 {name}
++	{count} linked source(s) could not be updated: {errors}	无法更新 {count} 个链接源：{errors}
++	Waiting to publish Smart Object contents	正在等待保存智能对象内容到目标位置
++	Reading the selected source	正在读取所选源文件
++	Reverted {name}	已恢复 {name}
++	Opened contents of {name}	已打开 {name} 的内容
++	Replaced contents of {name}	已替换 {name} 的内容
++	Relinked {name}	已重新链接 {name}
++	Embedded {name}	已嵌入 {name}
++
++# HarmonyOS port credits
++	HarmonyOS port	鸿蒙移植
++	Port author:	移植作者：
++	Port repository:	移植仓库：
++	This version is a native HarmonyOS port of PhotoCraft.	此版本为 PhotoCraft 的鸿蒙原生移植版。
+--- a/src/i18n/zh-hant.tsv
++++ b/src/i18n/zh-hant.tsv
+@@ -1978,3 +1978,103 @@
+ 	Opening…	正在開啟…
+ 	Reading…	正在讀取…
+ 	Working…	處理中…
++
++# OHOS folder workflows and automatic language selection.
++	Choose a folder	選擇資料夾
++	Choose another folder…	選擇其他資料夾…
++	Documents	文件
++	External output may already exist. Retrying creates another copy.	目的地可能已有輸出檔案。重試會建立另一份副本。
++	Original input failure details are unavailable.	無法取得原始輸入的失敗詳細資訊。
++	Recover folder outputs…	復原資料夾輸出…
++	Retained folder outputs	保留的資料夾輸出
++	Retry	重試
++	Retry publishes the retained files without processing them again.	重試會將保留的檔案儲存至目的地，無需重新處理。
++	Selected output folder	已選擇輸出資料夾
++	Selecting folder…	正在選擇資料夾…
++	Preparing retained folder output…	正在準備保留的資料夾輸出…
++	{label}: {files} retained files	{label}：{files} 個保留檔案
++	{label}: {files} files, {failed} inputs failed	{label}：{files} 個檔案，{failed} 個輸入失敗
++	{count} image files	{count} 個影像檔案
++	Auto (follow system)	自動（跟隨系統）
++	Follow system language	跟隨系統語言
++
++# Native OHOS import, folder processing and printing status.
++	Folder import cancellation requested	已要求取消資料夾匯入
++	Folder selection cancelled	已取消選擇資料夾
++	Importing folder: {done} / {total} MiB	正在匯入資料夾：{done} / {total} MiB
++	Selected {count} image files	已選擇 {count} 個影像檔案
++	Folder import failed; choose the folder again or retry	資料夾匯入失敗；請重新選擇資料夾或重試
++	{invalid} retained folder output records could not be verified; their files were preserved	無法驗證 {invalid} 筆保留的資料夾輸出紀錄；檔案已保留
++	Retained folder outputs can be recovered from the status bar	可從狀態列復原保留的資料夾輸出
++	Choosing a folder for retained output…	正在為保留的輸出選擇資料夾…
++	Preparing {command} output…	正在準備{command}輸出…
++	Publishing {files} processed files…	正在儲存 {files} 個已處理檔案至目的地…
++	Waiting to cancel output selection…	正在等待取消輸出資料夾選擇…
++	Batch cancelled; output retained but its recovery record could not be stored: {error}	批次處理已取消；輸出已保留，但無法儲存復原紀錄：{error}
++	Folder export cancelled; processed files retained	資料夾匯出已取消；已處理檔案已保留
++	Cancelling folder export…	正在取消資料夾匯出…
++	Recovery folder selection cancelled; output retained	復原資料夾選擇已取消；輸出已保留
++	Output folder selection cancelled	已取消選擇輸出資料夾
++	Output folder selected	已選擇輸出資料夾
++	{command} cancelled	{command}已取消
++	Folder processing failed; output material was retained	資料夾處理失敗；輸出內容已保留
++	Processing batch steps…	正在處理批次步驟…
++	Publishing processed files: {done} / {total} MiB	正在儲存已處理檔案至目的地：{done} / {total} MiB
++	Published {files} processed files; {failed} inputs failed	已儲存 {files} 個已處理檔案；{failed} 個輸入失敗
++	Published {files} retained files; original input failure details unavailable	已儲存 {files} 個保留檔案；無法取得原始輸入的失敗詳細資訊
++	; internal output was retained because cleanup failed	；清理失敗，內部輸出已保留
++	{status}; {files} processed files retained; {failed} inputs failed{partial}	{status}；{files} 個已處理檔案已保留；{failed} 個輸入失敗{partial}
++	Folder export cancelled	資料夾匯出已取消
++	; partial external output may remain	；目的地可能保留了部分輸出
++	Batch	批次處理
++	Lens Correction	鏡頭校正
++	Image Processor	影像處理器
++	The image could not be processed; check its format and available storage	無法處理影像；請檢查格式和可用儲存空間
++	{count} inputs could not be processed:	無法處理 {count} 個輸入：
++	Input image	輸入影像
++	Processing failed	處理失敗
++	{name}: {error}	{name}：{error}
++	And {count} more failed inputs	還有 {count} 個輸入失敗
++	Folder export failed; check authorization and available storage	資料夾匯出失敗；請檢查授權和可用儲存空間
++	Publishing retained folder output…	正在儲存保留的資料夾輸出至目的地…
++	Waiting to publish PDF	正在等待儲存 PDF 至目的地
++	PDF rendered for dry run; not submitted to a printer	試執行 PDF 已算繪；未提交至印表機
++	Waiting for system printing; confirm printer and copy count in the system dialog	正在等待系統列印；請在系統對話框中確認印表機和份數
++	System printing request accepted; final job state is unconfirmed	系統列印要求已接受；最終工作狀態尚未確認
++	System print job is blocked and can resume	系統列印工作暫停，可繼續
++	Print status monitoring failed; job result is unknown	列印狀態監控失敗；工作結果未知
++	System print job completed	系統列印工作已完成
++	System print job failed	系統列印工作失敗
++	System print job cancelled	系統列印工作已取消
++	System print request was rejected	系統列印要求遭拒絕
++	{status}: {error}	{status}：{error}
++	Batch cancelled	批次處理已取消
++
++# Native file save, export and Smart Object workflow status.
++	Saved destination history could not be restored: {error}; choose a destination again	無法復原已儲存的目的地紀錄：{error}；請重新選擇目的地
++	Choose a file to open	選擇要開啟的檔案
++	Waiting to publish {name}	正在等待儲存 {name} 至目的地
++	Placed {name}	已置入 {name}
++	Opened {name}	已開啟 {name}
++	Saved {name}	已儲存 {name}
++	Exported {name}	已匯出 {name}
++	File operation cancelled	檔案操作已取消
++	File operation failed	檔案操作失敗
++	The file operation failed	檔案操作失敗
++	Saved {name}; destination history could not be stored: {error}	已儲存 {name}；無法儲存目的地紀錄：{error}
++	Linked {name}	已連結 {name}
++	Updated {name}	已更新 {name}
++	{count} linked source(s) could not be updated: {errors}	無法更新 {count} 個連結來源：{errors}
++	Waiting to publish Smart Object contents	正在等待儲存智慧型物件內容至目的地
++	Reading the selected source	正在讀取所選來源檔案
++	Reverted {name}	已復原 {name}
++	Opened contents of {name}	已開啟 {name} 的內容
++	Replaced contents of {name}	已取代 {name} 的內容
++	Relinked {name}	已重新連結 {name}
++	Embedded {name}	已嵌入 {name}
++
++# HarmonyOS port credits
++	HarmonyOS port	鴻蒙移植
++	Port author:	移植作者：
++	Port repository:	移植倉庫：
++	This version is a native HarmonyOS port of PhotoCraft.	此版本為 PhotoCraft 的鴻蒙原生移植版。
+--- a/src/icon_data.rs
++++ b/src/icon_data.rs
+@@ -1,117 +1,117 @@
+ //! Lucide icons (ISC licence), embedded and tinted at runtime.
+ 
+ pub static ICONS: &[(&str, &[u8])] = &[
+-    ("align-center", include_bytes!("../../../assets/icons/align-center.svg")),
+-    ("align-justify", include_bytes!("../../../assets/icons/align-justify.svg")),
+-    ("align-left", include_bytes!("../../../assets/icons/align-left.svg")),
+-    ("align-right", include_bytes!("../../../assets/icons/align-right.svg")),
+-    ("app-window", include_bytes!("../../../assets/icons/app-window.svg")),
+-    ("arrow-left-right", include_bytes!("../../../assets/icons/arrow-left-right.svg")),
+-    ("ban", include_bytes!("../../../assets/icons/ban.svg")),
+-    ("bandage", include_bytes!("../../../assets/icons/bandage.svg")),
+-    ("blend", include_bytes!("../../../assets/icons/blend.svg")),
+-    ("brush", include_bytes!("../../../assets/icons/brush.svg")),
+-    ("brush-cleaning", include_bytes!("../../../assets/icons/brush-cleaning.svg")),
+-    ("check", include_bytes!("../../../assets/icons/check.svg")),
+-    ("chevron-down", include_bytes!("../../../assets/icons/chevron-down.svg")),
+-    ("chevron-right", include_bytes!("../../../assets/icons/chevron-right.svg")),
+-    ("chevron-up", include_bytes!("../../../assets/icons/chevron-up.svg")),
+-    ("chevrons-left", include_bytes!("../../../assets/icons/chevrons-left.svg")),
+-    ("chevrons-right", include_bytes!("../../../assets/icons/chevrons-right.svg")),
+-    ("circle", include_bytes!("../../../assets/icons/circle.svg")),
+-    ("circle-dashed", include_bytes!("../../../assets/icons/circle-dashed.svg")),
+-    ("circle-dot", include_bytes!("../../../assets/icons/circle-dot.svg")),
+-    ("clock", include_bytes!("../../../assets/icons/clock.svg")),
+-    ("cloud", include_bytes!("../../../assets/icons/cloud.svg")),
+-    ("compass", include_bytes!("../../../assets/icons/compass.svg")),
+-    ("contrast", include_bytes!("../../../assets/icons/contrast.svg")),
+-    ("copy", include_bytes!("../../../assets/icons/copy.svg")),
+-    ("crop", include_bytes!("../../../assets/icons/crop.svg")),
+-    ("diamond", include_bytes!("../../../assets/icons/diamond.svg")),
+-    ("droplet", include_bytes!("../../../assets/icons/droplet.svg")),
+-    ("ellipsis", include_bytes!("../../../assets/icons/ellipsis.svg")),
+-    ("eraser", include_bytes!("../../../assets/icons/eraser.svg")),
++    ("align-center", include_bytes!("../../../upstream/assets/icons/align-center.svg")),
++    ("align-justify", include_bytes!("../../../upstream/assets/icons/align-justify.svg")),
++    ("align-left", include_bytes!("../../../upstream/assets/icons/align-left.svg")),
++    ("align-right", include_bytes!("../../../upstream/assets/icons/align-right.svg")),
++    ("app-window", include_bytes!("../../../upstream/assets/icons/app-window.svg")),
++    ("arrow-left-right", include_bytes!("../../../upstream/assets/icons/arrow-left-right.svg")),
++    ("ban", include_bytes!("../../../upstream/assets/icons/ban.svg")),
++    ("bandage", include_bytes!("../../../upstream/assets/icons/bandage.svg")),
++    ("blend", include_bytes!("../../../upstream/assets/icons/blend.svg")),
++    ("brush", include_bytes!("../../../upstream/assets/icons/brush.svg")),
++    ("brush-cleaning", include_bytes!("../../../upstream/assets/icons/brush-cleaning.svg")),
++    ("check", include_bytes!("../../../upstream/assets/icons/check.svg")),
++    ("chevron-down", include_bytes!("../../../upstream/assets/icons/chevron-down.svg")),
++    ("chevron-right", include_bytes!("../../../upstream/assets/icons/chevron-right.svg")),
++    ("chevron-up", include_bytes!("../../../upstream/assets/icons/chevron-up.svg")),
++    ("chevrons-left", include_bytes!("../../../upstream/assets/icons/chevrons-left.svg")),
++    ("chevrons-right", include_bytes!("../../../upstream/assets/icons/chevrons-right.svg")),
++    ("circle", include_bytes!("../../../upstream/assets/icons/circle.svg")),
++    ("circle-dashed", include_bytes!("../../../upstream/assets/icons/circle-dashed.svg")),
++    ("circle-dot", include_bytes!("../../../upstream/assets/icons/circle-dot.svg")),
++    ("clock", include_bytes!("../../../upstream/assets/icons/clock.svg")),
++    ("cloud", include_bytes!("../../../upstream/assets/icons/cloud.svg")),
++    ("compass", include_bytes!("../../../upstream/assets/icons/compass.svg")),
++    ("contrast", include_bytes!("../../../upstream/assets/icons/contrast.svg")),
++    ("copy", include_bytes!("../../../upstream/assets/icons/copy.svg")),
++    ("crop", include_bytes!("../../../upstream/assets/icons/crop.svg")),
++    ("diamond", include_bytes!("../../../upstream/assets/icons/diamond.svg")),
++    ("droplet", include_bytes!("../../../upstream/assets/icons/droplet.svg")),
++    ("ellipsis", include_bytes!("../../../upstream/assets/icons/ellipsis.svg")),
++    ("eraser", include_bytes!("../../../upstream/assets/icons/eraser.svg")),
+     // Derived from Lucide's eraser (ISC): with a sparkle (Magic Eraser) / a transparency grid (Background Eraser).
+-    ("eraser-background", include_bytes!("../../../assets/icons/eraser-background.svg")),
+-    ("eraser-magic", include_bytes!("../../../assets/icons/eraser-magic.svg")),
+-    ("eye", include_bytes!("../../../assets/icons/eye.svg")),
+-    ("eye-off", include_bytes!("../../../assets/icons/eye-off.svg")),
+-    ("file", include_bytes!("../../../assets/icons/file.svg")),
+-    ("file-plus", include_bytes!("../../../assets/icons/file-plus.svg")),
+-    ("flame", include_bytes!("../../../assets/icons/flame.svg")),
+-    ("folder", include_bytes!("../../../assets/icons/folder.svg")),
+-    ("folder-open", include_bytes!("../../../assets/icons/folder-open.svg")),
+-    ("folder-plus", include_bytes!("../../../assets/icons/folder-plus.svg")),
+-    ("gauge", include_bytes!("../../../assets/icons/gauge.svg")),
+-    ("grid-2x2", include_bytes!("../../../assets/icons/grid-2x2.svg")),
+-    ("grid-3x3", include_bytes!("../../../assets/icons/grid-3x3.svg")),
+-    ("hand", include_bytes!("../../../assets/icons/hand.svg")),
+-    ("house", include_bytes!("../../../assets/icons/house.svg")),
+-    ("image", include_bytes!("../../../assets/icons/image.svg")),
+-    ("info", include_bytes!("../../../assets/icons/info.svg")),
+-    ("lasso", include_bytes!("../../../assets/icons/lasso.svg")),
+-    ("lasso-select", include_bytes!("../../../assets/icons/lasso-select.svg")),
+-    ("layers", include_bytes!("../../../assets/icons/layers.svg")),
+-    ("link", include_bytes!("../../../assets/icons/link.svg")),
+-    ("lock", include_bytes!("../../../assets/icons/lock.svg")),
+-    ("lock-open", include_bytes!("../../../assets/icons/lock-open.svg")),
+-    ("lollipop", include_bytes!("../../../assets/icons/lollipop.svg")),
+-    ("maximize-2", include_bytes!("../../../assets/icons/maximize-2.svg")),
+-    ("message-square", include_bytes!("../../../assets/icons/message-square.svg")),
+-    ("minus", include_bytes!("../../../assets/icons/minus.svg")),
+-    ("moon", include_bytes!("../../../assets/icons/moon.svg")),
+-    ("mouse-pointer-2", include_bytes!("../../../assets/icons/mouse-pointer-2.svg")),
+-    ("move", include_bytes!("../../../assets/icons/move.svg")),
+-    ("navigation", include_bytes!("../../../assets/icons/navigation.svg")),
+-    ("paint-bucket", include_bytes!("../../../assets/icons/paint-bucket.svg")),
+-    ("palette", include_bytes!("../../../assets/icons/palette.svg")),
+-    ("panel-right", include_bytes!("../../../assets/icons/panel-right.svg")),
+-    ("panels-top-left", include_bytes!("../../../assets/icons/panels-top-left.svg")),
+-    ("pen-tool", include_bytes!("../../../assets/icons/pen-tool.svg")),
+-    ("pencil", include_bytes!("../../../assets/icons/pencil.svg")),
+-    ("pentagon", include_bytes!("../../../assets/icons/pentagon.svg")),
+-    ("pipette", include_bytes!("../../../assets/icons/pipette.svg")),
+-    ("play", include_bytes!("../../../assets/icons/play.svg")),
+-    ("pause", include_bytes!("../../../assets/icons/pause.svg")),
+-    ("plus", include_bytes!("../../../assets/icons/plus.svg")),
+-    ("pointer", include_bytes!("../../../assets/icons/pointer.svg")),
+-    ("rectangle-horizontal", include_bytes!("../../../assets/icons/rectangle-horizontal.svg")),
+-    ("rectangle-vertical", include_bytes!("../../../assets/icons/rectangle-vertical.svg")),
+-    ("redo-2", include_bytes!("../../../assets/icons/redo-2.svg")),
+-    ("rotate-cw", include_bytes!("../../../assets/icons/rotate-cw.svg")),
+-    ("ruler", include_bytes!("../../../assets/icons/ruler.svg")),
+-    ("scaling", include_bytes!("../../../assets/icons/scaling.svg")),
+-    ("scan", include_bytes!("../../../assets/icons/scan.svg")),
+-    ("scan-line", include_bytes!("../../../assets/icons/scan-line.svg")),
+-    ("scissors", include_bytes!("../../../assets/icons/scissors.svg")),
+-    ("search", include_bytes!("../../../assets/icons/search.svg")),
+-    ("settings", include_bytes!("../../../assets/icons/settings.svg")),
+-    ("slash", include_bytes!("../../../assets/icons/slash.svg")),
+-    ("slice-knife", include_bytes!("../../../assets/icons/slice-knife.svg")),
+-    ("sliders-horizontal", include_bytes!("../../../assets/icons/sliders-horizontal.svg")),
+-    ("sparkles", include_bytes!("../../../assets/icons/sparkles.svg")),
+-    ("spline", include_bytes!("../../../assets/icons/spline.svg")),
+-    ("square", include_bytes!("../../../assets/icons/square.svg")),
+-    ("square-dashed", include_bytes!("../../../assets/icons/square-dashed.svg")),
+-    ("square-dashed-mouse-pointer", include_bytes!("../../../assets/icons/square-dashed-mouse-pointer.svg")),
+-    ("square-dot", include_bytes!("../../../assets/icons/square-dot.svg")),
+-    ("square-plus", include_bytes!("../../../assets/icons/square-plus.svg")),
+-    ("squares-subtract", include_bytes!("../../../assets/icons/squares-subtract.svg")),
+-    ("stamp", include_bytes!("../../../assets/icons/stamp.svg")),
+-    ("sun", include_bytes!("../../../assets/icons/sun.svg")),
+-    ("swatch-book", include_bytes!("../../../assets/icons/swatch-book.svg")),
+-    ("text-cursor", include_bytes!("../../../assets/icons/text-cursor.svg")),
+-    ("toggle-left", include_bytes!("../../../assets/icons/toggle-left.svg")),
+-    ("toggle-right", include_bytes!("../../../assets/icons/toggle-right.svg")),
+-    ("trash", include_bytes!("../../../assets/icons/trash.svg")),
+-    ("triangle", include_bytes!("../../../assets/icons/triangle.svg")),
+-    ("triangle-alert", include_bytes!("../../../assets/icons/triangle-alert.svg")),
+-    ("triangle-right", include_bytes!("../../../assets/icons/triangle-right.svg")),
+-    ("type", include_bytes!("../../../assets/icons/type.svg")),
+-    ("undo-2", include_bytes!("../../../assets/icons/undo-2.svg")),
+-    ("unlink", include_bytes!("../../../assets/icons/unlink.svg")),
+-    ("wand", include_bytes!("../../../assets/icons/wand.svg")),
+-    ("wand-sparkles", include_bytes!("../../../assets/icons/wand-sparkles.svg")),
+-    ("x", include_bytes!("../../../assets/icons/x.svg")),
+-    ("zoom-in", include_bytes!("../../../assets/icons/zoom-in.svg")),
++    ("eraser-background", include_bytes!("../../../upstream/assets/icons/eraser-background.svg")),
++    ("eraser-magic", include_bytes!("../../../upstream/assets/icons/eraser-magic.svg")),
++    ("eye", include_bytes!("../../../upstream/assets/icons/eye.svg")),
++    ("eye-off", include_bytes!("../../../upstream/assets/icons/eye-off.svg")),
++    ("file", include_bytes!("../../../upstream/assets/icons/file.svg")),
++    ("file-plus", include_bytes!("../../../upstream/assets/icons/file-plus.svg")),
++    ("flame", include_bytes!("../../../upstream/assets/icons/flame.svg")),
++    ("folder", include_bytes!("../../../upstream/assets/icons/folder.svg")),
++    ("folder-open", include_bytes!("../../../upstream/assets/icons/folder-open.svg")),
++    ("folder-plus", include_bytes!("../../../upstream/assets/icons/folder-plus.svg")),
++    ("gauge", include_bytes!("../../../upstream/assets/icons/gauge.svg")),
++    ("grid-2x2", include_bytes!("../../../upstream/assets/icons/grid-2x2.svg")),
++    ("grid-3x3", include_bytes!("../../../upstream/assets/icons/grid-3x3.svg")),
++    ("hand", include_bytes!("../../../upstream/assets/icons/hand.svg")),
++    ("house", include_bytes!("../../../upstream/assets/icons/house.svg")),
++    ("image", include_bytes!("../../../upstream/assets/icons/image.svg")),
++    ("info", include_bytes!("../../../upstream/assets/icons/info.svg")),
++    ("lasso", include_bytes!("../../../upstream/assets/icons/lasso.svg")),
++    ("lasso-select", include_bytes!("../../../upstream/assets/icons/lasso-select.svg")),
++    ("layers", include_bytes!("../../../upstream/assets/icons/layers.svg")),
++    ("link", include_bytes!("../../../upstream/assets/icons/link.svg")),
++    ("lock", include_bytes!("../../../upstream/assets/icons/lock.svg")),
++    ("lock-open", include_bytes!("../../../upstream/assets/icons/lock-open.svg")),
++    ("lollipop", include_bytes!("../../../upstream/assets/icons/lollipop.svg")),
++    ("maximize-2", include_bytes!("../../../upstream/assets/icons/maximize-2.svg")),
++    ("message-square", include_bytes!("../../../upstream/assets/icons/message-square.svg")),
++    ("minus", include_bytes!("../../../upstream/assets/icons/minus.svg")),
++    ("moon", include_bytes!("../../../upstream/assets/icons/moon.svg")),
++    ("mouse-pointer-2", include_bytes!("../../../upstream/assets/icons/mouse-pointer-2.svg")),
++    ("move", include_bytes!("../../../upstream/assets/icons/move.svg")),
++    ("navigation", include_bytes!("../../../upstream/assets/icons/navigation.svg")),
++    ("paint-bucket", include_bytes!("../../../upstream/assets/icons/paint-bucket.svg")),
++    ("palette", include_bytes!("../../../upstream/assets/icons/palette.svg")),
++    ("panel-right", include_bytes!("../../../upstream/assets/icons/panel-right.svg")),
++    ("panels-top-left", include_bytes!("../../../upstream/assets/icons/panels-top-left.svg")),
++    ("pen-tool", include_bytes!("../../../upstream/assets/icons/pen-tool.svg")),
++    ("pencil", include_bytes!("../../../upstream/assets/icons/pencil.svg")),
++    ("pentagon", include_bytes!("../../../upstream/assets/icons/pentagon.svg")),
++    ("pipette", include_bytes!("../../../upstream/assets/icons/pipette.svg")),
++    ("play", include_bytes!("../../../upstream/assets/icons/play.svg")),
++    ("pause", include_bytes!("../../../upstream/assets/icons/pause.svg")),
++    ("plus", include_bytes!("../../../upstream/assets/icons/plus.svg")),
++    ("pointer", include_bytes!("../../../upstream/assets/icons/pointer.svg")),
++    ("rectangle-horizontal", include_bytes!("../../../upstream/assets/icons/rectangle-horizontal.svg")),
++    ("rectangle-vertical", include_bytes!("../../../upstream/assets/icons/rectangle-vertical.svg")),
++    ("redo-2", include_bytes!("../../../upstream/assets/icons/redo-2.svg")),
++    ("rotate-cw", include_bytes!("../../../upstream/assets/icons/rotate-cw.svg")),
++    ("ruler", include_bytes!("../../../upstream/assets/icons/ruler.svg")),
++    ("scaling", include_bytes!("../../../upstream/assets/icons/scaling.svg")),
++    ("scan", include_bytes!("../../../upstream/assets/icons/scan.svg")),
++    ("scan-line", include_bytes!("../../../upstream/assets/icons/scan-line.svg")),
++    ("scissors", include_bytes!("../../../upstream/assets/icons/scissors.svg")),
++    ("search", include_bytes!("../../../upstream/assets/icons/search.svg")),
++    ("settings", include_bytes!("../../../upstream/assets/icons/settings.svg")),
++    ("slash", include_bytes!("../../../upstream/assets/icons/slash.svg")),
++    ("slice-knife", include_bytes!("../../../upstream/assets/icons/slice-knife.svg")),
++    ("sliders-horizontal", include_bytes!("../../../upstream/assets/icons/sliders-horizontal.svg")),
++    ("sparkles", include_bytes!("../../../upstream/assets/icons/sparkles.svg")),
++    ("spline", include_bytes!("../../../upstream/assets/icons/spline.svg")),
++    ("square", include_bytes!("../../../upstream/assets/icons/square.svg")),
++    ("square-dashed", include_bytes!("../../../upstream/assets/icons/square-dashed.svg")),
++    ("square-dashed-mouse-pointer", include_bytes!("../../../upstream/assets/icons/square-dashed-mouse-pointer.svg")),
++    ("square-dot", include_bytes!("../../../upstream/assets/icons/square-dot.svg")),
++    ("square-plus", include_bytes!("../../../upstream/assets/icons/square-plus.svg")),
++    ("squares-subtract", include_bytes!("../../../upstream/assets/icons/squares-subtract.svg")),
++    ("stamp", include_bytes!("../../../upstream/assets/icons/stamp.svg")),
++    ("sun", include_bytes!("../../../upstream/assets/icons/sun.svg")),
++    ("swatch-book", include_bytes!("../../../upstream/assets/icons/swatch-book.svg")),
++    ("text-cursor", include_bytes!("../../../upstream/assets/icons/text-cursor.svg")),
++    ("toggle-left", include_bytes!("../../../upstream/assets/icons/toggle-left.svg")),
++    ("toggle-right", include_bytes!("../../../upstream/assets/icons/toggle-right.svg")),
++    ("trash", include_bytes!("../../../upstream/assets/icons/trash.svg")),
++    ("triangle", include_bytes!("../../../upstream/assets/icons/triangle.svg")),
++    ("triangle-alert", include_bytes!("../../../upstream/assets/icons/triangle-alert.svg")),
++    ("triangle-right", include_bytes!("../../../upstream/assets/icons/triangle-right.svg")),
++    ("type", include_bytes!("../../../upstream/assets/icons/type.svg")),
++    ("undo-2", include_bytes!("../../../upstream/assets/icons/undo-2.svg")),
++    ("unlink", include_bytes!("../../../upstream/assets/icons/unlink.svg")),
++    ("wand", include_bytes!("../../../upstream/assets/icons/wand.svg")),
++    ("wand-sparkles", include_bytes!("../../../upstream/assets/icons/wand-sparkles.svg")),
++    ("x", include_bytes!("../../../upstream/assets/icons/x.svg")),
++    ("zoom-in", include_bytes!("../../../upstream/assets/icons/zoom-in.svg")),
+ ];
+--- a/src/jobs_ui.rs
++++ b/src/jobs_ui.rs
+@@ -54,7 +54,11 @@
+ /// it), else synchronously like [`photocraft_engine::Session::execute`].
+ pub fn run(app: &mut PhotocraftApp, id: &str, params: Value) -> Result<Value, String> {
+     if !app.background_jobs {
+-        return app.session.execute(id, params).map_err(|e| e.to_string());
++        let result = app.session.execute(id, params).map_err(|e| e.to_string())?;
++        if let Some(job) = result["job"].as_u64().map(JobId) {
++            app.jobs.last_started = Some(job);
++        }
++        return Ok(result);
+     }
+     match app.session.start(id, params).map_err(|e| e.to_string())? {
+         Started::Done(v) => Ok(v),
+@@ -170,10 +174,10 @@
+             app.ui.panels.brush_settings = true;
+             app.ui.brush_tab = 1;
+         }
+-        JobOutcome::Done(_) => {
++        JobOutcome::Done(value) => {
+             app.sync_views();
+-            app.ui.status = e.label;
+-            app.ui.status_error = false;
++            app.ui.status = value["error"].as_str().or_else(|| value["status"].as_str()).map(str::to_string).unwrap_or(e.label);
++            app.ui.status_error = value["ok"] == false || value["errors"].as_array().is_some_and(|errors| !errors.is_empty());
+         }
+         JobOutcome::Failed(err) => {
+             app.sync_views();
+@@ -249,6 +253,9 @@
+ 
+ /// The status bar's job readout: "Gaussian Blur ▬▬▬▭▭ 45 %  ×". Draws nothing when no job runs.
+ pub fn status_progress(app: &mut PhotocraftApp, ui: &mut egui::Ui) {
++    if crate::folder_ui::status_progress(app, ui) {
++        return;
++    }
+     let Some(j) = job_in_view(app) else { return };
+     let t = Tokens::get(ui.ctx());
+     let (bar_w, bar_h) = if t.pro { (120.0, 6.0) } else { (140.0, 6.0) };
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -50,6 +50,7 @@
+ pub mod file_ui;
+ pub mod fill_ui;
+ pub mod filter_dialog;
++pub mod folder_ui;
+ pub mod gallery_ui;
+ pub mod gpu_canvas;
+ pub mod gpu_status;
+@@ -146,7 +147,45 @@
+ /// Encode a document: (file bytes, warnings about anything approximated or dropped).
+ pub type ExportFn = Box<dyn Fn(&Document, &str, &ExportSettings) -> Result<(Vec<u8>, Vec<String>), String>>;
+ pub type PickOpenFn = Box<dyn FnMut() -> Option<(String, Vec<u8>)>>;
++/// Logical file identity and presentation supplied by a sandboxed platform.
++#[derive(Clone)]
++pub struct RecentFileInfo {
++    pub identity: String,
++    pub name: String,
++    pub location: String,
++    pub tooltip: String,
++}
++pub type RecentFileFn = Box<dyn Fn(&str) -> RecentFileInfo>;
++/// Refresh the external source asynchronously, rather than reopening a cached import.
++pub type OpenRecentFn = Box<dyn FnMut(&str) -> Result<(), String>>;
+ pub type PickSaveFn = Box<dyn FnMut(&str) -> Option<String>>;
++/// A system picker that completes after the current UI pass. The command and
++/// target identity let the platform preserve Open/Place intent across tab changes.
++pub type PickOpenIntentFn = Box<dyn FnMut(&str, Option<u64>, &Value) -> Option<(String, Vec<u8>)>>;
++/// Return a staged path when publication is asynchronous. Saving state and the
++/// unsaved-changes prompt remain pending until complete_deferred_save is called.
++pub type DeferSaveFn = Box<dyn FnMut(u64, u64, &str) -> Result<Option<String>, String>>;
++/// Mark Save a Copy as a format-selecting save without changing dirty state.
++/// Platform-published flat files may reuse their explicit destination.
++pub type SaveInPlaceFn = Box<dyn Fn(&str) -> bool>;
++pub type SaveCopyReadyFn = Box<dyn FnMut(&str) -> Result<(), String>>;
++/// Platform Quick Export keeps ambient same-folder writes behind system file authority.
++pub type QuickExportFn = Box<dyn FnMut(&mut Session) -> Result<Value, String>>;
++/// Render with the engine and delegate native print jobs to the platform.
++pub type PrintFn = Box<dyn FnMut(&mut Session, &str, &Value) -> Result<Value, String>>;
++pub type ProcessFolderFn = Box<dyn FnMut(&mut Session, &str, &Value) -> Result<Value, String>>;
++pub type FolderProgressFn = Box<dyn FnMut(bool) -> Option<String>>;
++#[derive(Clone)]
++pub struct FolderRecovery {
++    pub id: u64,
++    pub label: String,
++    pub files: usize,
++    pub failed: usize,
++    pub partial: bool,
++    pub unknown_failures: bool,
++}
++pub type FolderRecoveriesFn = Box<dyn Fn() -> Vec<FolderRecovery>>;
++pub type FolderRecoveryActionFn = Box<dyn FnMut(u64, bool) -> Result<(), String>>;
+ pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
+ /// Read bytes through the desktop control session's authorized read root.
+ pub type AutomationReadFn = Box<dyn FnMut(&str) -> Result<(String, Vec<u8>), String>>;
+@@ -161,6 +200,8 @@
+ pub type ClipboardSetFn = Box<dyn FnMut(u32, u32, &[u8]) -> Result<(), String>>;
+ /// Read an RGBA8 image from the OS clipboard.
+ pub type ClipboardGetFn = Box<dyn FnMut() -> Option<(u32, u32, Vec<u8>)>>;
++/// Queue a system paste, or return false when a completed snapshot is ready.
++pub type ClipboardRequestFn = Box<dyn FnMut(&str, Option<u64>) -> Result<bool, String>>;
+ /// Shared queue of (file name, bytes) delivered asynchronously.
+ pub type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(String, Vec<u8>)>>>;
+ /// Read the saved preferences text (`None` when there is none yet).
+@@ -188,10 +229,26 @@
+     pub export: Option<ExportFn>,
+     /// Show an "open file" dialog; returns (name, bytes).
+     pub pick_open: Option<PickOpenFn>,
++    pub pick_open_intent: Option<PickOpenIntentFn>,
++    pub recent_file: Option<RecentFileFn>,
++    pub open_recent: Option<OpenRecentFn>,
+     /// Show a "save file" dialog; returns a path/name to write.
+     pub pick_save: Option<PickSaveFn>,
+     /// Write bytes to a path (native) or trigger a download (web).
+     pub write: Option<WriteFn>,
++    pub defer_save: Option<DeferSaveFn>,
++    pub save_copy_ready: Option<SaveCopyReadyFn>,
++    pub save_in_place: Option<SaveInPlaceFn>,
++    pub quick_export: Option<QuickExportFn>,
++    pub print: Option<PrintFn>,
++    pub browse_folder: Option<folder_ui::BrowseFn>,
++    pub browse_folder_destination: Option<folder_ui::BrowseFn>,
++    pub process_folder: Option<ProcessFolderFn>,
++    /// Multi-file exports use the engine's immutable tree publication service.
++    pub tree_output: bool,
++    pub folder_progress: Option<FolderProgressFn>,
++    pub folder_recoveries: Option<FolderRecoveriesFn>,
++    pub recover_folder: Option<FolderRecoveryActionFn>,
+     /// File access used only by control/MCP requests. Interactive dialogs keep
+     /// using `pick_open`, `pick_save` and `write` with the user's authority.
+     pub automation_read: Option<AutomationReadFn>,
+@@ -206,6 +263,7 @@
+     /// OS clipboard images: copies go out, screenshots and images from other apps come in.
+     pub clipboard_set_image: Option<ClipboardSetFn>,
+     pub clipboard_get_image: Option<ClipboardGetFn>,
++    pub clipboard_request: Option<ClipboardRequestFn>,
+     /// Preferences persistence: the platform config directory on native, browser storage on
+     /// the web (see `prefs_ui`).
+     pub load_prefs: Option<LoadTextFn>,
+@@ -228,6 +286,9 @@
+     pub session: Session,
+     pub ui: UiState,
+     pub services: Services,
++    deferred_save: Option<DeferredSave>,
++    /// Identity of each positional view/window binding at the last synchronization.
++    view_documents: Vec<DocId>,
+     canvases: HashMap<DocId, canvas::CanvasCache>,
+     checker: Option<egui::TextureHandle>,
+     drag: Option<canvas::Drag>,
+@@ -362,12 +423,21 @@
+     live_tokens: theme::live::LiveTokens,
+ }
+ 
++struct DeferredSave {
++    document: u64,
++    revision: u64,
++    path: String,
++    warnings: Vec<String>,
++}
++
+ impl PhotocraftApp {
+     pub fn new(session: Session, services: Services) -> Self {
+         let mut app = Self {
+             session,
+             ui: UiState::default(),
+             services,
++            deferred_save: None,
++            view_documents: Vec::new(),
+             canvases: HashMap::new(),
+             checker: None,
+             drag: None,
+@@ -439,6 +509,7 @@
+         prefs_ui::load(&mut app);
+         // File › Scripts › Script Events Manager: "Start Application".
+         photocraft_engine::automate_cmds::fire_event(&mut app.session, "startApplication");
++        app.sync_views();
+         app
+     }
+ 
+@@ -499,6 +570,14 @@
+         // The OS clipboard is read only on an explicit paste, never in the background (privacy, CPU).
+         if matches!(id, "edit.paste" | "edit.pasteSpecial.pasteInPlace" | "file.newFromClipboard") {
+             if !clip_read {
++                let target = self.session.active().map(|st| st.doc.id.0);
++                if let Some(request) = self.services.clipboard_request.as_mut()
++                    && request(id, target)?
++                {
++                    return Ok(serde_json::json!({"pending": true}));
++                }
++            }
++            if !clip_read {
+                 self.import_os_clipboard();
+             }
+             if self.session.clipboard.is_none() && self.services.clipboard_get_image.is_some() {
+@@ -509,7 +588,16 @@
+             }
+         }
+         // Long commands become background jobs when enabled (`jobs_ui`); the rest run inline.
+-        let r = jobs_ui::run(self, id, params);
++        let r = if folder_ui::output_command(id) && self.services.process_folder.is_some() {
++            match self.services.process_folder.as_mut() {
++                Some(process) => process(&mut self.session, id, &params),
++                None => Err("Folder processing is unavailable".into()),
++            }
++        } else if matches!(id, "file.print" | "file.printOneCopy") {
++            if let Some(print) = self.services.print.as_mut() { print(&mut self.session, id, &params) } else { jobs_ui::run(self, id, params) }
++        } else {
++            jobs_ui::run(self, id, params)
++        };
+         if r.is_ok() && matches!(id, "edit.copy" | "edit.cut" | "edit.copyMerged") {
+             self.clip_external = false;
+             self.export_os_clipboard();
+@@ -519,10 +607,21 @@
+         match &r {
+             Ok(_) => {
+                 self.sync_views();
+-                if self.ui.status_error {
++                if self.ui.status_error || folder_ui::field(id).is_some() {
+                     self.ui.status.clear();
+                     self.ui.status_error = false;
+                 }
++                if (matches!(id, "file.print" | "file.printOneCopy") || folder_ui::output_command(id))
++                    && let Some(status) = r.as_ref().ok().and_then(|value| value["status"].as_str())
++                {
++                    self.ui.status = status.into();
++                }
++                if matches!(id, "file.print" | "file.printOneCopy")
++                    && let Some(warnings) = r.as_ref().ok().and_then(|value| value["warnings"].as_array())
++                {
++                    let warnings = warnings.iter().filter_map(|warning| warning.as_str().map(str::to_string)).collect::<Vec<_>>();
++                    notices::io_warnings(self, "Printing", &warnings);
++                }
+             }
+             Err(e) => {
+                 self.ui.status = e.clone();
+@@ -537,9 +636,22 @@
+ 
+     /// Keep one view per document.
+     pub fn sync_views(&mut self) {
+-        let n = self.session.documents().len();
++        let documents = self.session.documents();
++        let n = documents.len();
++        if self.view_documents.len() != n || self.view_documents.iter().zip(documents).any(|(id, state)| *id != state.doc.id) {
++            let next: Vec<DocId> = documents.iter().map(|state| state.doc.id).collect();
++            let previous: HashMap<DocId, state::View> = self.view_documents.iter().copied().zip(std::mem::take(&mut self.ui.views)).collect();
++            self.ui.views = next.iter().map(|id| previous.get(id).cloned().unwrap_or_default()).collect();
++            self.ui.windows.retain_mut(|window| {
++                let Some(document) = self.view_documents.get(window.document) else { return false };
++                let Some(index) = next.iter().position(|id| id == document) else { return false };
++                window.document = index;
++                true
++            });
++            self.view_documents = next;
++        }
+         self.ui.views.resize_with(n, Default::default);
+-        self.ui.windows.retain(|w| w.document < n);
++        self.ui.windows.retain(|window| window.document < n);
+         self.prune_thumbs();
+         self.sync_mask_targets();
+         // Channel-view textures outlive a hidden view (cheap re-show), not their document.
+@@ -558,7 +670,8 @@
+     pub fn push_recent(&mut self, path: &str) {
+         let cap = self.recent_cap();
+         let mut r = self.session.prefs().file_handling.recent_files.clone();
+-        r.retain(|p| p != path);
++        let identity = self.recent_file_info(path).identity;
++        r.retain(|p| self.recent_file_info(p).identity != identity);
+         r.insert(0, path.to_string());
+         r.truncate(cap);
+         self.ui.recent_files = r.clone();
+@@ -582,9 +695,43 @@
+     pub fn sync_recent(&mut self) {
+         let cap = self.recent_cap();
+         let stored = &self.session.prefs().file_handling.recent_files;
+-        let want = stored.get(..cap.min(stored.len())).unwrap_or_default();
+-        if self.ui.recent_files.as_slice() != want {
+-            self.ui.recent_files = want.to_vec();
++        if self.services.recent_file.is_none() {
++            let want = stored.get(..cap.min(stored.len())).unwrap_or_default();
++            if self.ui.recent_files.as_slice() != want {
++                self.ui.recent_files = want.to_vec();
++            }
++            return;
++        }
++        let mut seen = std::collections::HashSet::new();
++        let want: Vec<_> = stored.iter().filter(|path| seen.insert(self.recent_file_info(path).identity)).take(cap).cloned().collect();
++        if self.ui.recent_files != want {
++            self.ui.recent_files = want.clone();
++        }
++        if *stored != want {
++            self.session.prefs.edit(|p| p.file_handling.recent_files = want);
++        }
++    }
++
++    pub fn recent_file_info(&self, path: &str) -> RecentFileInfo {
++        if let Some(info) = &self.services.recent_file {
++            return info(path);
++        }
++        RecentFileInfo {
++            identity: path.into(),
++            name: file_open::display_name(path),
++            location: std::path::Path::new(path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default(),
++            tooltip: path.into(),
++        }
++    }
++
++    pub fn open_recent(&mut self, path: &str) -> Result<Vec<String>, String> {
++        if let Some(open) = &mut self.services.open_recent {
++            open(path)?;
++            self.ui.status = "Opening recent file…".into();
++            self.ui.status_error = false;
++            Ok(Vec::new())
++        } else {
++            self.open_path(path)
+         }
+     }
+ 
+@@ -670,12 +817,95 @@
+     /// File › Open: the platform dialog returns the chosen file's path (native; the web delivers
+     /// picks through the inbox instead).
+     pub fn open_dialog_file(&mut self) {
+-        let picked = self.services.pick_open.as_mut().and_then(|f| f());
++        let picked = self.pick_open_for("file.open");
+         if let Some((path, bytes)) = picked
+             && let Err(e) = self.open_file(&path, &bytes)
+         {
+             self.open_failed(&file_open::display_name(&path), &e);
+         }
++    }
++
++    /// Preserve the menu command and document identity for an asynchronous system picker.
++    pub fn pick_open_for(&mut self, intent: &str) -> Option<(String, Vec<u8>)> {
++        self.pick_open_with(intent, &Value::Null)
++    }
++
++    /// Keep import options (for example preset kinds) attached to the request.
++    pub fn pick_open_with(&mut self, intent: &str, params: &Value) -> Option<(String, Vec<u8>)> {
++        let target = self.session.active().map(|st| st.doc.id.0);
++        if let Some(pick) = self.services.pick_open_intent.as_mut() {
++            pick(intent, target, params)
++        } else {
++            self.services.pick_open.as_mut().and_then(|pick| pick())
++        }
++    }
++
++    /// True only after the original unsaved-changes prompt authorized quitting.
++    pub fn allow_native_close(&self) -> bool {
++        self.allow_close
++    }
++    pub fn native_close_pending(&self) -> bool {
++        discard_ui::native_close_pending(self)
++    }
++
++    pub fn has_pending_save(&self, document: u64) -> bool {
++        self.deferred_save.as_ref().is_some_and(|save| save.document == document)
++    }
++
++    /// Re-encoding the immutable save snapshot after the system picker chose a
++    /// format changes only the deferred publication path and format warnings.
++    pub fn retarget_deferred_save(&mut self, document: u64, revision: u64, old_path: &str, path: &str, warnings: Option<Vec<String>>) -> Result<(), String> {
++        let save = self.deferred_save.as_mut().ok_or("no deferred save")?;
++        if save.document != document || save.revision != revision || save.path != old_path {
++            return Err("deferred save identity does not match".into());
++        }
++        save.path = path.into();
++        if let Some(warnings) = warnings {
++            save.warnings = warnings;
++        }
++        Ok(())
++    }
++
++    /// Apply Save in the unsaved-changes prompt using the same guarded path as
++    /// its button. Native shells and headless integration tests can exercise it
++    /// without reading or mutating the private prompt state.
++    pub fn save_unsaved_changes(&mut self, ctx: &egui::Context) {
++        discard_ui::save_current(self, ctx);
++    }
++
++    /// Acknowledge external publication. Only the encoded revision becomes saved;
++    /// a pending close advances only if that document has no subsequent edits.
++    pub fn complete_deferred_save(&mut self, ctx: &egui::Context, document: u64, revision: u64, path: &str, success: bool) -> Result<(), String> {
++        let pending = self.deferred_save.as_ref().ok_or("no deferred save")?;
++        if pending.document != document || pending.revision != revision || pending.path != path {
++            return Err("deferred save identity does not match".into());
++        }
++        let pending = self.deferred_save.take().ok_or("no deferred save")?;
++        if !success {
++            ctx.request_repaint();
++            return Ok(());
++        }
++        let active = self.session.active().map(|st| st.doc.id.0);
++        if let Some(index) = self.session.documents().iter().position(|st| st.doc.id.0 == document) {
++            self.session.set_active(index);
++            if let Some(st) = self.session.active_mut() {
++                st.path = Some(path.into());
++                std::sync::Arc::make_mut(&mut st.doc).name = file_open::display_name(path);
++                st.saved_revision = revision;
++            }
++            let _ = photocraft_engine::automate_cmds::document_saved(&mut self.session, index);
++        }
++        if let Some(index) = active.and_then(|id| self.session.documents().iter().position(|st| st.doc.id.0 == id)) {
++            self.session.set_active(index);
++        }
++        self.push_recent(path);
++        self.sync_views();
++        self.ui.status = format!("Saved {path}");
++        self.ui.status_error = false;
++        notices::io_warnings(self, &format!("Saved {}", file_open::display_name(path)), &pending.warnings);
++        discard_ui::published(self, ctx, document, revision);
++        ctx.request_repaint();
++        Ok(())
+     }
+ 
+     /// Save the active document to `path` (or a path chosen in the save dialog); returns the path
+@@ -697,6 +927,15 @@
+         let (bytes, warnings) = export(&st.doc, &path, &ExportSettings::default())?;
+         let write = self.services.write.as_mut().ok_or("no writer configured")?;
+         write(&path, &bytes)?;
++        let (document, revision) = self.session.active().map(|st| (st.doc.id.0, st.revision)).ok_or("no document")?;
++        if let Some(defer) = self.services.defer_save.as_mut()
++            && let Some(stage) = defer(document, revision, &path)?
++        {
++            self.deferred_save = Some(DeferredSave { document, revision, path: stage.clone(), warnings: warnings.clone() });
++            self.ui.status = format!("Waiting to publish {}", file_open::display_name(&stage));
++            self.ui.status_error = false;
++            return Ok((stage, warnings));
++        }
+         if let Some(st) = self.session.active_mut() {
+             st.path = Some(path.clone());
+             st.saved_revision = st.revision;
+--- a/src/menus.rs
++++ b/src/menus.rs
+@@ -227,11 +227,12 @@
+         }
+         "file.save" => {
+             // Writes back only to a layered file; a flat one goes through Save As.
+-            let path = params
+-                .get("path")
+-                .and_then(Value::as_str)
+-                .map(str::to_string)
+-                .or_else(|| app.session.active().and_then(|d| d.path.clone()).filter(|p| photocraft_engine::file_cmds::saves_in_place(p)));
++            let path = params.get("path").and_then(Value::as_str).map(str::to_string).or_else(|| {
++                app.session
++                    .active()
++                    .and_then(|d| d.path.clone())
++                    .filter(|p| photocraft_engine::file_cmds::saves_in_place(p) || app.services.save_in_place.as_ref().is_some_and(|allowed| allowed(p)))
++            });
+             app.save_as(path).map(|(p, w)| json!({"path": p, "warnings": w}))
+         }
+         "file.exit" => {
+@@ -246,7 +247,7 @@
+             #[cfg(not(target_arch = "wasm32"))]
+             {
+                 match id.rsplit('.').next().and_then(|s| s.parse::<usize>().ok()).and_then(|i| app.ui.recent_files.get(i).cloned()) {
+-                    Some(p) => open_path(app, &p),
++                    Some(p) => app.open_recent(&p).map(|w| json!({"warnings":w})),
+                     None => Err("no such recent file".to_string()),
+                 }
+             }
+@@ -333,6 +334,12 @@
+             crate::transform_tool::begin_selection(app, ctx).map(|_| json!({"transform": app.ui.transform}))
+         }
+         "edit.paste" if params.as_object().is_none_or(|o| o.is_empty()) => {
++            let target = app.session.active().map(|st| st.doc.id.0);
++            if let Some(request) = app.services.clipboard_request.as_mut()
++                && request("edit.paste", target)?
++            {
++                return Ok(json!({"pending": true}));
++            }
+             // Photoshop: paste in place when the copied area is visible, else centred in the view;
+             // images from other apps are always centred.
+             app.import_os_clipboard();
+@@ -655,7 +662,7 @@
+             .iter()
+             .enumerate()
+             .map(|(i, p)| {
+-                let label = std::path::Path::new(p).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.clone());
++                let label = app.recent_file_info(p).name;
+                 MenuItem { id: format!("file.openRecent.{i}"), label, path: rp.clone(), shortcut: None, enabled: true, checked: None, color: None }
+             })
+             .collect();
+--- a/src/panels.rs
++++ b/src/panels.rs
+@@ -888,7 +888,7 @@
+                     {
+                         app.ui.views[i].fit_pending = true;
+                     }
+-                    if app.session.has_jobs() {
++                    if app.session.has_jobs() || crate::folder_ui::has_progress(app) {
+                         ui.add_space(6.0);
+                         crate::jobs_ui::status_progress(app, ui);
+                     }
+--- a/src/prefs_ui.rs
++++ b/src/prefs_ui.rs
+@@ -774,7 +774,7 @@
+                 }
+                 Value::String(s) if path == "interface.language" => {
+                     ui.label(RichText::new(tl!(&label)).color(t.text_dim));
+-                    let mut pairs: Vec<(String, &str)> = vec![("auto".into(), tl!("Auto"))];
++                    let mut pairs: Vec<(String, &str)> = vec![("auto".into(), crate::i18n::tr(lang, "Auto (follow system)"))];
+                     pairs.extend(crate::i18n::Lang::all().map(|l| (l.code().to_string(), l.name())));
+                     let mut cur = s.clone();
+                     crate::widgets::dropdown(ui, &format!("pref-{path}"), &mut cur, &pairs, 220.0);
+@@ -1166,7 +1166,10 @@
+         "presetsIO" => {
+             let kinds: Vec<&str> = ["brushes", "customShapes"].into_iter().filter(|k| f.get(*k).and_then(Value::as_bool).unwrap_or(true)).collect();
+             if f.get("action").and_then(Value::as_str) == Some("import") {
+-                let (name, bytes) = app.services.pick_open.as_mut().and_then(|p| p()).ok_or("cancelled")?;
++                let picked = app.pick_open_with("edit.presets.exportImportPresets", &json!({"kinds": kinds}));
++                let Some((name, bytes)) = picked else {
++                    return Ok(Value::Null);
++                };
+                 let text = String::from_utf8(bytes).map_err(|_| format!("{name} is not a preset file"))?;
+                 app.run("edit.presets.exportImportPresets", json!({"action": "import", "kinds": kinds, "data": text}))
+             } else {
+--- a/src/type_tool.rs
++++ b/src/type_tool.rs
+@@ -270,6 +270,13 @@
+     Some(text_layer(&app.session.active()?.doc, id)?.text.clone())
+ }
+ 
++/// Current document text for the native IME's surrounding-text snapshot.
++/// Character offsets remain in `UiState::text_edit`; the platform converts them
++/// to UTF-16 without exposing the engine's private text-layer helpers.
++pub fn editing_text(app: &PhotocraftApp) -> Option<String> {
++    current_text(app, LayerId(app.ui.text_edit.as_ref()?.layer))
++}
++
+ /// Replace the selection with `s`.
+ fn insert(app: &mut PhotocraftApp, s: &str) {
+     let Some(ed) = app.ui.text_edit.clone() else { return };
+@@ -449,6 +456,20 @@
+             egui::Event::Ime(egui::ImeEvent::Preedit { text: s, .. } | egui::ImeEvent::Commit(s)) if s == "\n" || s == "\r" => handled[k] = false,
+             egui::Event::Ime(egui::ImeEvent::Preedit { text, .. }) => ime_update(app, text, false),
+             egui::Event::Ime(egui::ImeEvent::Commit(s)) => ime_update(app, s, true),
++            egui::Event::Ime(egui::ImeEvent::DeleteSurrounding { before_chars, after_chars }) => {
++                let (a, b) = ed.preedit.map(|(start, len)| (start, start + len)).unwrap_or((a, b));
++                let start = a.saturating_sub(*before_chars);
++                let end = b.saturating_add(*after_chars).min(n);
++                let selected: String = text.chars().skip(a).take(b - a).collect();
++                if app.run("type.edit", json!({"layer": ed.layer, "replace": {"start": start, "end": end, "text": selected}, "coalesce": ed.session})).is_ok()
++                    && let Some(edit) = app.ui.text_edit.as_mut()
++                {
++                    let removed = a - start;
++                    edit.caret = edit.caret.saturating_sub(removed);
++                    edit.anchor = edit.anchor.saturating_sub(removed);
++                    edit.preedit = ed.preedit.map(|(_, len)| (start, len));
++                }
++            }
+             egui::Event::Ime(_) => {}
+             egui::Event::Copy | egui::Event::Cut => {
+                 if a < b {
+--- a/src/view_cmds.rs
++++ b/src/view_cmds.rs
+@@ -709,10 +709,26 @@
+ 
+ /// Body of a `__form` dialog: text fields, number fields, checkboxes and `__choices` dropdowns.
+ pub fn form_body(ui: &mut egui::Ui, f: &mut Map<String, Value>) {
++    form_body_inner(ui, f, None);
++}
++
++pub fn form_body_with_resources(app: &mut PhotocraftApp, ui: &mut egui::Ui, dialog: u64, f: &mut Map<String, Value>) {
++    form_body_inner(ui, f, Some((app, dialog)));
++}
++
++fn form_body_inner(ui: &mut egui::Ui, f: &mut Map<String, Value>, mut folder: Option<(&mut PhotocraftApp, u64)>) {
+     let choices = f.get("__choices").cloned().unwrap_or(Value::Null);
+     let keys: Vec<String> = f.keys().filter(|k| !k.starts_with("__")).cloned().collect();
+     egui::Grid::new("form-dialog").num_columns(2).spacing([12.0, 6.0]).show(ui, |ui| {
+         for k in keys {
++            if let Some((app, dialog)) = folder.as_mut()
++                && crate::folder_ui::applies(app, f, &k)
++            {
++                ui.label(label_of(&k));
++                crate::folder_ui::row(app, ui, *dialog, f, &k);
++                ui.end_row();
++                continue;
++            }
+             let v = f.get(&k).cloned().unwrap_or(Value::Null);
+             let new = match &v {
+                 Value::Array(_) | Value::Object(_) | Value::Null => continue,
+@@ -795,12 +811,17 @@
+     let dialog = |app: &mut PhotocraftApp, fields: Value, choices: Value| Some(Ok(json!({"dialog": form(app, id, label, fields, choices)})));
+     match id {
+         "file.openAs" => {
+-            app.open_dialog_file();
++            if let Some((path, bytes)) = app.pick_open_for("file.openAs") {
++                return Some(app.open_file(&path, &bytes).map(|_| Value::Null));
++            }
+             Some(Ok(Value::Null))
+         }
+         "file.saveACopy" => Some(save_a_copy(app)),
+         "file.placeEmbedded" | "file.placeLinked" => {
+-            let (name, bytes) = app.services.pick_open.as_mut().and_then(|f| f())?;
++            let picked = app.pick_open_for(id);
++            let Some((name, bytes)) = picked else {
++                return Some(Ok(Value::Null));
++            };
+             let linked = (id == "file.placeLinked").then(|| name.clone());
+             let r = photocraft_engine::file_cmds::place_bytes(&mut app.session, &name, bytes, linked, &json!({})).map_err(|e| e.to_string());
+             app.sync_views();
+@@ -985,6 +1006,9 @@
+     let (bytes, warnings) = export(&doc, &path, &crate::ExportSettings::default())?;
+     let write = app.services.write.as_mut().ok_or("no writer configured")?;
+     write(&path, &bytes)?;
++    if let Some(copy_ready) = app.services.save_copy_ready.as_mut() {
++        copy_ready(&path)?;
++    }
+     app.ui.status = format!("Saved a copy as {path}");
+     app.ui.status_error = false;
+     crate::notices::io_warnings(app, &format!("Saved a copy as {}", crate::file_open::display_name(&path)), &warnings);

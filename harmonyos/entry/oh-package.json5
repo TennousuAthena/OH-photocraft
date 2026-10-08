@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "0.1.0",
+  "description": "PhotoCraft native surface host",
+  "license": "MIT",
+  "dependencies": {
+    "libphotocraft.so": "file:./src/main/types/libphotocraft"
+  }
+}

@@ -1,0 +1,33 @@
+[package]
+name = "eframe"
+version = "0.36.2"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+description = "PhotoCraft OHOS integration seam; no desktop window backend"
+publish = false
+
+[features]
+default = []
+default_fonts = ["egui/default_fonts"]
+# egui 0.36 has AccessKit tree support unconditionally; the native bridge belongs
+# to the OHOS runner rather than egui-winit.
+accesskit = []
+# Preserve PhotoCraft's requested feature names. The OHOS runner owns backend selection.
+wgpu = ["wgpu_no_default_features"]
+wgpu_no_default_features = ["dep:egui-wgpu"]
+
+[dependencies]
+egui = { version = "=0.36.2", default-features = false }
+egui-wgpu = { version = "=0.36.2", default-features = false, features = ["capture"], optional = true }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unimplemented = "deny"
+todo = "deny"
+unreachable = "deny"

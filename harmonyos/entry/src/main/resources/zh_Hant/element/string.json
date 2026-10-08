@@ -1,0 +1,984 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "PhotoCraft 影像編輯器"
+    },
+    {
+      "name": "ability_desc",
+      "value": "適用於 HarmonyOS PC 的 PhotoCraft"
+    },
+    {
+      "name": "permission_pasteboard",
+      "value": "用於按您的貼上操作讀取剪貼簿中的文字與影像"
+    },
+    {
+      "name": "shell_the_clipboard_contains_no_image_to_paste",
+      "value": "剪貼簿中沒有可貼上的圖片"
+    },
+    {
+      "name": "shell_the_clipboard_contains_no_text_to_paste",
+      "value": "剪貼簿中沒有可貼上的文字"
+    },
+    {
+      "name": "shell_the_decoded_clipboard_image_exceeds_64_mib_or_has",
+      "value": "剪貼簿影像解碼尺寸超過 64 MiB 上限或尺寸無效"
+    },
+    {
+      "name": "shell_the_clipboard_image_file_is_empty_or_exceeds_64",
+      "value": "剪貼簿圖片檔案為空或超過 64 MiB 上限"
+    },
+    {
+      "name": "shell_invalid_clipboard_temporary_file_path",
+      "value": "剪貼簿臨時檔案路徑無效"
+    },
+    {
+      "name": "shell_the_copied_image_is_outside_the_app_sandbox",
+      "value": "複製影像不在應用沙箱中"
+    },
+    {
+      "name": "shell_the_recent_file_record_is_invalid_or_too_large",
+      "value": "最近檔案記錄無效或過大，請重新開啟檔案"
+    },
+    {
+      "name": "shell_the_recent_file_records_are_invalid_or_too_numerous",
+      "value": "最近檔案記錄無效或過多，請重新開啟檔案"
+    },
+    {
+      "name": "shell_duplicate_recent_file_source_record",
+      "value": "最近檔案來源記錄重複"
+    },
+    {
+      "name": "shell_the_recent_file_source_record_is_invalid_open_the",
+      "value": "最近檔案來源記錄無效，請重新開啟檔案"
+    },
+    {
+      "name": "shell_a_folder_source_cannot_be_used_as_a_single",
+      "value": "資料夾來源記錄不能冒充單檔案來源"
+    },
+    {
+      "name": "shell_the_recent_file_source_record_is_empty",
+      "value": "最近檔案來源記錄為空"
+    },
+    {
+      "name": "shell_invalid_open_file_request",
+      "value": "開啟檔案請求無效"
+    },
+    {
+      "name": "shell_the_recent_file_request_is_missing_its_original_source",
+      "value": "最近檔案請求缺少原來源"
+    },
+    {
+      "name": "shell_documents_with_notes",
+      "value": "包含備註的文件|.pcraft,.psd,.psb"
+    },
+    {
+      "name": "shell_photocraft_scripts",
+      "value": "PhotoCraft 指令碼|.json,.jsonl,.txt"
+    },
+    {
+      "name": "shell_all_files",
+      "value": "所有檔案|.*"
+    },
+    {
+      "name": "shell_photocraft_presets",
+      "value": "PhotoCraft 預設|.pcpresets,.json"
+    },
+    {
+      "name": "shell_all_supported_images_and_projects",
+      "value": "所有支援的影像與工程|.pcraft,.psd,.psb,.png,.apng,.jpg,.jpeg,.jpe,.jfif,.tif,.tiff,.webp,.gif,.bmp,.dib,.tga,.icb,.vda,.vst,.ico,.pnm,.pbm,.pgm,.ppm,.pam,.pfm,.qoi,.exr,.hdr,.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.pef,.orf,.rw2,.raf,.abr,.grd"
+    },
+    {
+      "name": "shell_common_images",
+      "value": "常用影像|.png,.apng,.jpg,.jpeg,.jpe,.jfif,.tif,.tiff,.webp,.gif,.bmp,.dib"
+    },
+    {
+      "name": "shell_other_images",
+      "value": "其他影像|.tga,.icb,.vda,.vst,.ico,.pnm,.pbm,.pgm,.ppm,.pam,.pfm,.qoi,.exr,.hdr"
+    },
+    {
+      "name": "shell_camera_raw_selected_formats",
+      "value": "相機 RAW（部分格式）|.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.pef,.orf,.rw2,.raf"
+    },
+    {
+      "name": "shell_the_file_source_record_is_unavailable_select_the_source",
+      "value": "檔案來源記錄不可用，請重新選擇來原始檔"
+    },
+    {
+      "name": "shell_permission_to_read_the_file_source_has_expired_select",
+      "value": "檔案來源讀取授權已失效，請重新選擇來原始檔"
+    },
+    {
+      "name": "shell_invalid_recent_file_source",
+      "value": "最近檔案來源無效"
+    },
+    {
+      "name": "shell_the_save_request_is_missing_the_encoded_file_extension",
+      "value": "儲存請求缺少已編碼檔案的副檔名"
+    },
+    {
+      "name": "shell_detail_file",
+      "value": "{0} 檔案|.{1}"
+    },
+    {
+      "name": "shell_the_save_request_has_no_available_output_format",
+      "value": "儲存請求沒有可用輸出格式"
+    },
+    {
+      "name": "shell_the_saved_file_extension_must_be_detail",
+      "value": "儲存副檔名必須為 .{0}"
+    },
+    {
+      "name": "shell_invalid_recovery_record_size",
+      "value": "復原記錄大小異常"
+    },
+    {
+      "name": "shell_invalid_recovery_record_format",
+      "value": "復原記錄格式異常"
+    },
+    {
+      "name": "shell_the_recent_file_is_outside_the_app_document_storage",
+      "value": "最近檔案不屬於應用文件儲存"
+    },
+    {
+      "name": "shell_the_recent_file_storage_contains_an_invalid_directory_or",
+      "value": "最近檔案儲存包含無效目錄或連結"
+    },
+    {
+      "name": "shell_the_app_file_storage_directory_is_invalid_cannot_save",
+      "value": "應用檔案儲存目錄異常，無法安全儲存"
+    },
+    {
+      "name": "shell_invalid_app_file_storage_directory",
+      "value": "應用檔案儲存目錄無效"
+    },
+    {
+      "name": "shell_too_many_recent_file_source_records_clear_the_history",
+      "value": "最近檔案來源記錄過多，請清理歷史後重新開啟"
+    },
+    {
+      "name": "shell_the_file_destination_record_was_not_fully_written",
+      "value": "檔案目標記錄未完整寫入"
+    },
+    {
+      "name": "shell_invalid_file_name",
+      "value": "檔名無效"
+    },
+    {
+      "name": "shell_another_folder_selection_is_in_progress_complete_or_cancel",
+      "value": "另一個資料夾選擇正在進行，請完成或取消後重試"
+    },
+    {
+      "name": "shell_this_dialog_does_not_support_folder_output",
+      "value": "此表單不支援目錄輸出"
+    },
+    {
+      "name": "shell_this_device_does_not_support_authorized_folder_export",
+      "value": "此裝置不支援授權資料夾匯出"
+    },
+    {
+      "name": "shell_select_one_output_folder",
+      "value": "請選擇一個輸出目錄"
+    },
+    {
+      "name": "shell_too_many_folder_selection_records_select_again_or_clear",
+      "value": "目錄選擇記錄過多，請重新選擇或清理已完成任務"
+    },
+    {
+      "name": "shell_invalid_system_generated_folder_identifier",
+      "value": "系統隨機目錄標識無效"
+    },
+    {
+      "name": "shell_could_not_create_a_unique_folder_selection_record",
+      "value": "未能建立獨有目錄選擇記錄"
+    },
+    {
+      "name": "shell_could_not_authorize_the_selected_output_folder_error_detail",
+      "value": "無法授權所選輸出目錄（錯誤 {0}），請重新選擇"
+    },
+    {
+      "name": "shell_could_not_select_the_output_folder_try_again",
+      "value": "無法選擇輸出目錄，請重試"
+    },
+    {
+      "name": "shell_invalid_folder_selection_identifier_select_the_folder_again",
+      "value": "目錄選擇標識無效，請重新選擇"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_select_the_folder_again",
+      "value": "目錄選擇記錄異常，請重新選擇"
+    },
+    {
+      "name": "shell_the_folder_selection_belongs_to_another_task_select_the",
+      "value": "目錄選擇不屬於原任務，請重新選擇"
+    },
+    {
+      "name": "shell_output_folder_permission_has_expired_select_the_folder_again",
+      "value": "輸出目錄授權已失效，請重新選擇"
+    },
+    {
+      "name": "shell_the_selected_output_location_is_not_a_folder_select",
+      "value": "所選輸出位置不是目錄，請重新選擇"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_path",
+      "value": "目錄選擇記錄路徑異常"
+    },
+    {
+      "name": "shell_the_folder_selection_record_exceeds_the_size_limit",
+      "value": "目錄選擇記錄超過大小限制"
+    },
+    {
+      "name": "shell_the_folder_selection_record_was_not_fully_written",
+      "value": "目錄選擇記錄未完整寫入"
+    },
+    {
+      "name": "shell_the_import_directory_is_not_empty_recursive_cleanup_was",
+      "value": "匯入目錄仍有內容，拒絕遞迴清理"
+    },
+    {
+      "name": "shell_invalid_original_folder_source_record",
+      "value": "原資料夾來源記錄無效"
+    },
+    {
+      "name": "shell_another_folder_import_is_in_progress",
+      "value": "另一個資料夾匯入正在進行"
+    },
+    {
+      "name": "shell_invalid_folder_import_request",
+      "value": "資料夾匯入請求無效"
+    },
+    {
+      "name": "shell_this_device_does_not_support_persistent_folder_import_permissions",
+      "value": "此裝置不支援持久授權資料夾匯入"
+    },
+    {
+      "name": "shell_select_only_one_folder_to_import",
+      "value": "資料夾匯入只能選擇一個目錄"
+    },
+    {
+      "name": "shell_could_not_retain_permission_to_the_selected_folder",
+      "value": "未能持久授權所選資料夾"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_size_limit_import_stopped",
+      "value": "資料夾超過大小限制，已停止匯入"
+    },
+    {
+      "name": "shell_folder_import_failed_check_the_permissions_or_folder_and",
+      "value": "資料夾匯入失敗，請檢查許可權或目錄後重試（錯誤 {0}）"
+    },
+    {
+      "name": "shell_folder_import_failed_try_again",
+      "value": "資料夾匯入失敗，請重試"
+    },
+    {
+      "name": "shell_cleanup_of_the_imported_copy_is_incomplete_local_files",
+      "value": "；匯入副本清理未完成，本地材料已保留"
+    },
+    {
+      "name": "shell_folder_copying_is_still_running_copy_cleanup_was_refused",
+      "value": "資料夾複製仍在執行，拒絕清理副本"
+    },
+    {
+      "name": "shell_the_imported_copy_belongs_to_another_request_cleanup_was",
+      "value": "匯入副本不屬於原請求，拒絕清理"
+    },
+    {
+      "name": "shell_an_imported_copy_ancestor_is_not_a_regular_directory",
+      "value": "匯入副本祖先不是普通目錄，拒絕清理"
+    },
+    {
+      "name": "shell_the_imported_copy_ownership_record_is_invalid_cleanup_was",
+      "value": "匯入副本所屬記錄無效，拒絕清理"
+    },
+    {
+      "name": "shell_the_imported_copy_target_does_not_match_cleanup_was",
+      "value": "匯入副本目標身份不一致，拒絕清理"
+    },
+    {
+      "name": "shell_the_imported_copy_root_or_manifest_is_outside_its",
+      "value": "匯入副本的實際根或清單越界，拒絕清理"
+    },
+    {
+      "name": "shell_the_folder_import_storage_directory_is_invalid_links_will",
+      "value": "資料夾匯入儲存目錄異常，拒絕跟隨連結"
+    },
+    {
+      "name": "shell_the_folder_manifest_or_permission_record_exceeds_the_size",
+      "value": "資料夾清單或授權記錄超過大小上限"
+    },
+    {
+      "name": "shell_the_folder_manifest_was_not_fully_written",
+      "value": "資料夾清單未完整寫入"
+    },
+    {
+      "name": "shell_invalid_folder_input_request_identity",
+      "value": "資料夾輸入請求身份無效"
+    },
+    {
+      "name": "shell_the_folder_input_queue_is_full_cancel_and_try",
+      "value": "資料夾輸入佇列超過上限，請取消後重試"
+    },
+    {
+      "name": "shell_unsupported_folder_input_request",
+      "value": "不支援的資料夾輸入請求"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel",
+      "value": "另一個檔案操作正在進行，請完成或取消後再選擇資料夾"
+    },
+    {
+      "name": "shell_could_not_cancel_folder_copying_immediately_waiting_for_the",
+      "value": "無法立即取消資料夾複製，正在等待任務結束"
+    },
+    {
+      "name": "shell_invalid_folder_input_progress",
+      "value": "資料夾輸入進度無效"
+    },
+    {
+      "name": "shell_folder_import_failed",
+      "value": "資料夾匯入失敗"
+    },
+    {
+      "name": "shell_the_folder_input_result_does_not_match_the_request",
+      "value": "資料夾輸入結果身份不一致，未設定原表單"
+    },
+    {
+      "name": "shell_import_was_canceled_but_the_local_copy_could_not",
+      "value": "匯入已取消，但本地副本未能清理；材料已保留，請稍後重試"
+    },
+    {
+      "name": "shell_the_local_imported_copy_could_not_be_removed_files",
+      "value": "本地匯入副本未能清理，材料已保留"
+    },
+    {
+      "name": "shell_invalid_output_folder_request_identity",
+      "value": "輸出目錄請求身份無效"
+    },
+    {
+      "name": "shell_too_many_output_folder_requests_cancel_and_try_again",
+      "value": "輸出目錄請求過多，請取消後重試"
+    },
+    {
+      "name": "shell_invalid_output_folder_request_format",
+      "value": "輸出目錄請求格式無效"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel_91",
+      "value": "另一個檔案操作正在進行，請完成或取消後重試"
+    },
+    {
+      "name": "shell_waiting_for_system_folder_selection_to_finish",
+      "value": "正在等待系統資料夾選擇結束"
+    },
+    {
+      "name": "shell_the_output_folder_operation_is_incomplete_select_the_folder",
+      "value": "輸出目錄操作未完成，請重新選擇後重試"
+    },
+    {
+      "name": "shell_invalid_output_folder_result_identity_select_the_folder_again",
+      "value": "輸出目錄結果身份無效，請重新選擇"
+    },
+    {
+      "name": "shell_folder_selection_was_canceled_but_the_local_permission_record",
+      "value": "目錄選擇已取消，但本地授權記錄仍保留，請重新選擇後重試"
+    },
+    {
+      "name": "shell_the_folder_output_belongs_to_another_task_generate_the",
+      "value": "目錄輸出不屬於原任務，請重新生成輸出"
+    },
+    {
+      "name": "shell_folder_export_canceled",
+      "value": "目錄匯出已取消"
+    },
+    {
+      "name": "shell_invalid_system_generated_folder_name",
+      "value": "系統隨機目錄名稱無效"
+    },
+    {
+      "name": "shell_could_not_create_a_new_output_folder_name",
+      "value": "未能建立全新的輸出目錄名稱"
+    },
+    {
+      "name": "shell_the_output_folder_name_already_exists_overwriting_was_refused",
+      "value": "輸出目錄名稱已存在，拒絕覆蓋"
+    },
+    {
+      "name": "shell_the_output_copy_location_needs_manual_inspection",
+      "value": "輸出副本位置需要人工檢查"
+    },
+    {
+      "name": "shell_select_the_output_folder_in_the_original_dialog_first",
+      "value": "請先在原表單選擇輸出目錄"
+    },
+    {
+      "name": "shell_the_output_folder_permission_service_is_not_ready",
+      "value": "輸出目錄授權服務尚未就緒"
+    },
+    {
+      "name": "shell_could_not_authorize_the_selected_output_folder",
+      "value": "未能授權所選輸出目錄"
+    },
+    {
+      "name": "shell_the_selected_output_location_is_not_a_folder",
+      "value": "所選輸出位置不是目錄"
+    },
+    {
+      "name": "shell_too_many_retained_folder_output_tasks_to_inspect_resolve",
+      "value": "保留的目錄輸出任務超過檢查上限，請先處理已保留副本"
+    },
+    {
+      "name": "shell_the_folder_output_storage_contains_an_invalid_task_it",
+      "value": "目錄輸出儲存包含異常任務，已保留原樣"
+    },
+    {
+      "name": "shell_an_incomplete_folder_output_record_was_found_the_local",
+      "value": "發現未完成的目錄輸出記錄；本地副本已保留，請檢查輸出目錄後重新匯出"
+    },
+    {
+      "name": "shell_invalid_folder_output_record",
+      "value": "目錄輸出記錄無效"
+    },
+    {
+      "name": "shell_a_local_copy_of_a_completed_folder_export_was",
+      "value": "發現已完成目錄匯出的本地副本，等待原任務確認"
+    },
+    {
+      "name": "shell_an_incomplete_folder_output_was_found_local_output_files",
+      "value": "發現未完成的目錄輸出；本地輸出材料已保留，請檢查輸出目錄後重新匯出"
+    },
+    {
+      "name": "shell_invalid_folder_output_task_ownership_record",
+      "value": "目錄輸出任務所屬記錄無效"
+    },
+    {
+      "name": "shell_the_folder_output_path_is_invalid_links_will_not",
+      "value": "目錄輸出路徑異常，拒絕跟隨連結"
+    },
+    {
+      "name": "shell_the_folder_output_record_is_not_a_valid_regular",
+      "value": "目錄輸出記錄不是有效普通檔案"
+    },
+    {
+      "name": "shell_the_folder_output_record_contains_links_or_special_files",
+      "value": "目錄輸出記錄包含連結或特殊檔案"
+    },
+    {
+      "name": "shell_the_folder_output_record_was_not_fully_written",
+      "value": "目錄輸出記錄未完整寫入"
+    },
+    {
+      "name": "shell_invalid_folder_output_request_identity",
+      "value": "目錄輸出請求身份無效"
+    },
+    {
+      "name": "shell_the_folder_output_queue_is_full_cancel_and_try",
+      "value": "目錄輸出佇列超過上限，請取消後重試"
+    },
+    {
+      "name": "shell_invalid_folder_output_request",
+      "value": "目錄輸出請求無效"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel_122",
+      "value": "另一個檔案操作正在進行，請完成或取消後再匯出"
+    },
+    {
+      "name": "shell_waiting_for_folder_output_to_finish_keep_the_system",
+      "value": "正在等待目錄輸出結束，請勿關閉系統檔案視窗"
+    },
+    {
+      "name": "shell_the_folder_export_result_could_not_be_confirmed_local",
+      "value": "目錄匯出結果未能確認；本地輸出仍保留，請檢查新輸出目錄後重新匯出"
+    },
+    {
+      "name": "shell_invalid_folder_output_receipt_local_output_has_been_retained",
+      "value": "目錄輸出回執無效；本地輸出已保留，請檢查輸出目錄後重試"
+    },
+    {
+      "name": "shell_invalid_folder_output_progress",
+      "value": "目錄輸出進度無效"
+    },
+    {
+      "name": "shell_invalid_folder_export_request_identity",
+      "value": "目錄匯出請求身份無效"
+    },
+    {
+      "name": "shell_invalid_folder_export_sandbox_root",
+      "value": "目錄匯出沙箱根目錄無效"
+    },
+    {
+      "name": "shell_the_folder_export_does_not_belong_to_a_unique",
+      "value": "目錄匯出不屬於本應用獨有輸出任務"
+    },
+    {
+      "name": "shell_the_folder_export_source_must_be_the_complete_output",
+      "value": "目錄匯出源必須是任務的完整輸出樹"
+    },
+    {
+      "name": "shell_another_folder_export_is_in_progress_wait_or_cancel",
+      "value": "另一個目錄匯出正在進行，請等待或取消後重試"
+    },
+    {
+      "name": "shell_the_folder_export_request_is_invalid_or_already_processed",
+      "value": "目錄匯出請求無效或已經處理，請使用新請求重試"
+    },
+    {
+      "name": "shell_too_many_folder_export_requests_in_this_session_reopen",
+      "value": "本次會話的目錄匯出請求過多，請重新開啟應用"
+    },
+    {
+      "name": "shell_the_folder_export_contains_no_output_files",
+      "value": "目錄匯出沒有輸出檔案"
+    },
+    {
+      "name": "shell_could_not_generate_a_new_safe_output_folder_name",
+      "value": "無法生成全新的安全輸出目錄名稱"
+    },
+    {
+      "name": "shell_could_not_process_folder_export_progress",
+      "value": "目錄匯出進度處理失敗"
+    },
+    {
+      "name": "shell_folder_export_is_incomplete_and_the_recovery_record_could",
+      "value": "目錄匯出未完成，復原記錄未能更新；本地完整輸出仍保留，請檢查輸出目錄後重試或另選目錄"
+    },
+    {
+      "name": "shell_folder_copying_finished_but_export_completion_could_not_be",
+      "value": "目錄複製已結束，但本次匯出未能確認完成；完整輸出仍保留，請檢查新輸出目錄後重試"
+    },
+    {
+      "name": "shell_folder_export_is_incomplete_and_partial_results_may_remain",
+      "value": "目錄匯出未完成，可能保留部分結果；完整輸出仍保留，請檢查新輸出目錄後重試或另選目錄"
+    },
+    {
+      "name": "shell_folder_export_was_canceled_complete_output_has_been_retained",
+      "value": "目錄匯出已取消，完整輸出仍保留，可重新匯出"
+    },
+    {
+      "name": "shell_folder_export_did_not_start_complete_output_has_been",
+      "value": "目錄匯出未開始，完整輸出仍保留；請檢查許可權或輸出檔案後重試"
+    },
+    {
+      "name": "shell_invalid_original_folder_copy_identity",
+      "value": "原資料夾副本身份無效"
+    },
+    {
+      "name": "shell_invalid_original_folder_request_identity",
+      "value": "原資料夾請求身份無效"
+    },
+    {
+      "name": "shell_the_original_folder_copy_contains_links_or_invalid_entries",
+      "value": "原資料夾副本包含連結或無效節點"
+    },
+    {
+      "name": "shell_the_original_folder_source_ownership_record_does_not_match",
+      "value": "原資料夾來源所屬記錄不匹配"
+    },
+    {
+      "name": "shell_the_original_folder_copy_does_not_match_the_source",
+      "value": "原資料夾副本與來源清單不匹配"
+    },
+    {
+      "name": "shell_could_not_read_the_original_folder_again_authorize_the",
+      "value": "無法重新讀取原資料夾，請重新授權來源"
+    },
+    {
+      "name": "shell_the_source_file_in_the_original_folder_was_deleted",
+      "value": "原資料夾中的來原始檔已刪除或更名，請重新選擇來源"
+    },
+    {
+      "name": "shell_the_newly_read_source_file_is_invalid",
+      "value": "重新讀取的來原始檔無效"
+    },
+    {
+      "name": "shell_the_folder_source_record_is_invalid_or_too_large",
+      "value": "資料夾來源記錄無效或過大"
+    },
+    {
+      "name": "shell_invalid_output_task_or_folder_selection_identifier",
+      "value": "輸出任務或目錄選擇標識無效"
+    },
+    {
+      "name": "shell_could_not_prepare_the_output_folder_error_detail_select",
+      "value": "無法準備輸出目錄（錯誤 {0}），請重新選擇後重試"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_select_the_folder_again_and",
+      "value": "目錄選擇記錄異常，請重新選擇後重試"
+    },
+    {
+      "name": "shell_could_not_prepare_the_output_folder_select_it_again",
+      "value": "無法準備輸出目錄，請重新選擇後重試"
+    },
+    {
+      "name": "shell_could_not_request_editor_closure_detail",
+      "value": "無法請求關閉編輯器：{0}"
+    },
+    {
+      "name": "shell_system_printing_detail",
+      "value": "系統列印：{0}"
+    },
+    {
+      "name": "shell_could_not_monitor_window_state_detail",
+      "value": "視窗狀態監聽失敗：{0}"
+    },
+    {
+      "name": "shell_invalid_platform_request_number",
+      "value": "平臺請求編號無效"
+    },
+    {
+      "name": "shell_could_not_get_the_editor_screen_position_input_method",
+      "value": "無法取得編輯區域的螢幕位置，輸入法候選框暫不可定位"
+    },
+    {
+      "name": "shell_could_not_handle_the_close_request_detail",
+      "value": "處理關閉請求失敗：{0}"
+    },
+    {
+      "name": "shell_could_not_confirm_system_print_status_check_the_system",
+      "value": "無法確認系統列印狀態，請檢查系統列印介面"
+    },
+    {
+      "name": "shell_a_folder_operation_is_in_progress_complete_or_cancel",
+      "value": "資料夾操作正在進行，請完成或取消後再貼上"
+    },
+    {
+      "name": "shell_the_window_service_is_not_ready",
+      "value": "視窗服務尚未就緒"
+    },
+    {
+      "name": "shell_unsupported_platform_request_detail",
+      "value": "不支援的平臺請求：{0}"
+    },
+    {
+      "name": "shell_clipboard_text_exceeds_the_1_mib_platform_input_limit",
+      "value": "剪貼簿文字超過 1 MiB 平臺輸入上限"
+    },
+    {
+      "name": "shell_the_editor_input_queue_is_busy_try_pasting_again",
+      "value": "編輯器輸入佇列繁忙，請重試貼上"
+    },
+    {
+      "name": "shell_error_detail",
+      "value": "錯誤 {0}"
+    },
+    {
+      "name": "shell_system_operation_failed_detail",
+      "value": "系統操作失敗：{0}"
+    },
+    {
+      "name": "shell_could_not_remove_the_clipboard_temporary_image_detail",
+      "value": "清理剪貼簿臨時影像失敗：{0}"
+    },
+    {
+      "name": "shell_could_not_wait_for_file_operations_to_finish_detail",
+      "value": "等待檔案操作結束失敗：{0}"
+    },
+    {
+      "name": "shell_could_not_close_the_input_method_detail",
+      "value": "關閉輸入法失敗：{0}"
+    },
+    {
+      "name": "shell_could_not_close_photocraft_detail",
+      "value": "無法關閉 PhotoCraft：{0}"
+    },
+    {
+      "name": "shell_invalid_folder_input_request_format",
+      "value": "資料夾輸入請求格式無效"
+    },
+    {
+      "name": "shell_could_not_handle_the_folder_operation_detail",
+      "value": "處理資料夾操作失敗：{0}"
+    },
+    {
+      "name": "shell_invalid_folder_publication_request_identity",
+      "value": "目錄釋出請求身份無效"
+    },
+    {
+      "name": "shell_the_local_folder_selection_record_could_not_be_removed",
+      "value": "本地目錄選擇記錄未能清理；已保留，不影響使用者輸出檔案"
+    },
+    {
+      "name": "shell_too_many_print_jobs_wait_for_existing_jobs_to",
+      "value": "列印任務過多，請等待現有任務完成"
+    },
+    {
+      "name": "shell_system_printing_is_unavailable_on_this_device",
+      "value": "此裝置未提供系統列印服務"
+    },
+    {
+      "name": "shell_the_print_file_must_be_a_pdf_in_the",
+      "value": "列印檔案必須是應用沙箱內的 PDF"
+    },
+    {
+      "name": "shell_the_print_pdf_file_is_unavailable",
+      "value": "列印 PDF 檔案不可用"
+    },
+    {
+      "name": "shell_system_print_request_failed",
+      "value": "系統列印呼叫失敗"
+    },
+    {
+      "name": "shell_the_save_recovery_record_was_not_fully_written",
+      "value": "儲存復原記錄未完整寫入"
+    },
+    {
+      "name": "shell_an_incomplete_recovery_record_from_the_previous_save_was",
+      "value": "發現上次儲存未正常結束的復原記錄，已有復原材料保持原樣。"
+    },
+    {
+      "name": "shell_check_the_original_file_then_save_the_current_edits",
+      "value": "請先核對原檔案，再將當前編輯另存；不會自動覆蓋外部檔案。"
+    },
+    {
+      "name": "shell_a_save_record_for_a_written_file_still_needs",
+      "value": "發現已寫入檔案但尚未清理的儲存記錄，復原材料保持原樣。請核對目標檔案。"
+    },
+    {
+      "name": "shell_save_failed_the_original_file_was_restored_try_saving",
+      "value": "儲存失敗，原檔案已復原。請重試儲存或另存。原因：{0}"
+    },
+    {
+      "name": "shell_could_not_retain_the_new_file_detail",
+      "value": "；保留新檔案時發生錯誤：{0}"
+    },
+    {
+      "name": "shell_save_failed_and_the_original_file_could_not_be",
+      "value": "儲存失敗，原檔案復原也未完成；舊備份和新檔案已保留。"
+    },
+    {
+      "name": "shell_use_save_as_to_save_the_current_edits_then",
+      "value": "請使用另存儲存當前編輯，檢查目標檔案後再繼續。儲存原因：{0}；復原原因：{1}"
+    },
+    {
+      "name": "shell_could_not_save_safely_the_original_file_is_unchanged",
+      "value": "無法安全儲存，原檔案未被改寫。請選擇可讀寫的位置另存。"
+    },
+    {
+      "name": "shell_reason_detail",
+      "value": "原因：{0}"
+    },
+    {
+      "name": "shell_cleanup_after_saving_could_not_be_confirmed_check_the",
+      "value": " 儲存後的清理未能確認完成，請核對原檔案。"
+    },
+    {
+      "name": "shell_the_file_was_written_but_cleanup_after_saving_could",
+      "value": "檔案已寫入，但儲存後的清理未能確認完成。請檢查目標檔案。原因：{0}"
+    },
+    {
+      "name": "shell_folder_import_canceled",
+      "value": "資料夾匯入已取消"
+    },
+    {
+      "name": "shell_folder_import_limits_must_be_1_500_files_and",
+      "value": "資料夾匯入限制必須為 1–500 個檔案，大小不超過 1 GiB"
+    },
+    {
+      "name": "shell_the_folder_contains_an_unsafe_relative_path",
+      "value": "資料夾包含不安全的相對路徑"
+    },
+    {
+      "name": "shell_the_import_root_must_be_a_unique_sandbox_directory",
+      "value": "匯入根目錄必須是獨有沙箱目錄"
+    },
+    {
+      "name": "shell_the_sandbox_root_contains_an_unsafe_path",
+      "value": "沙箱根目錄包含不安全的路徑"
+    },
+    {
+      "name": "shell_the_folder_copy_container_is_not_a_regular_directory",
+      "value": "資料夾複製容器不是普通目錄"
+    },
+    {
+      "name": "shell_the_folder_provider_copy_hierarchy_does_not_match_a",
+      "value": "資料夾提供方的複製層級不符合已支援的目錄佈局"
+    },
+    {
+      "name": "shell_the_folder_copy_is_not_a_unique_regular_source",
+      "value": "資料夾複製結果不是唯一普通源目錄，拒絕跟隨連結"
+    },
+    {
+      "name": "shell_the_import_directory_is_not_a_regular_directory_links",
+      "value": "匯入目錄不是普通目錄，拒絕跟隨連結"
+    },
+    {
+      "name": "shell_the_folder_manifest_contains_a_path_outside_its_directory",
+      "value": "資料夾清單包含越界路徑"
+    },
+    {
+      "name": "shell_the_folder_manifest_contains_duplicate_paths",
+      "value": "資料夾清單包含重複路徑"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_limit_of_4096_entries",
+      "value": "資料夾目錄項超過 4096 項上限"
+    },
+    {
+      "name": "shell_the_folder_contains_links_or_special_files_and_was",
+      "value": "資料夾包含連結或特殊檔案，未匯入"
+    },
+    {
+      "name": "shell_invalid_folder_entry_size",
+      "value": "資料夾條目大小無效"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_file_count_or_size_limit",
+      "value": "資料夾超出檔案數量或大小限制"
+    },
+    {
+      "name": "shell_could_not_safely_remove_an_invalid_directory_entry",
+      "value": "無法安全清理異常目錄項"
+    },
+    {
+      "name": "shell_the_window_service_is_closed",
+      "value": "視窗服務已關閉"
+    },
+    {
+      "name": "shell_the_fullscreen_request_is_missing_its_state",
+      "value": "全屏請求缺少狀態"
+    },
+    {
+      "name": "shell_the_maximize_request_is_missing_its_state",
+      "value": "最大化請求缺少狀態"
+    },
+    {
+      "name": "shell_unsupported_window_request_detail",
+      "value": "不支援的視窗請求：{0}"
+    },
+    {
+      "name": "shell_could_not_read_window_state_detail",
+      "value": "無法讀取視窗狀態：{0}"
+    },
+    {
+      "name": "shell_index_paste_reading",
+      "value": "正在讀取剪貼簿…"
+    },
+    {
+      "name": "shell_index_paste_confirm",
+      "value": "系統需要你確認本次貼上"
+    },
+    {
+      "name": "shell_index_paste_denied",
+      "value": "系統未能授權本次貼上，請重試"
+    },
+    {
+      "name": "shell_index_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "shell_index_init_failed",
+      "value": "PhotoCraft 初始化失敗"
+    },
+    {
+      "name": "shell_index_request_id_invalid",
+      "value": "檔案請求編號無效"
+    },
+    {
+      "name": "shell_index_file_service_not_ready",
+      "value": "檔案服務尚未就緒"
+    },
+    {
+      "name": "shell_index_encode_failed",
+      "value": "無法編碼所選儲存格式"
+    },
+    {
+      "name": "shell_index_request_unsupported",
+      "value": "不支援的檔案請求"
+    },
+    {
+      "name": "shell_index_drop_busy",
+      "value": "檔案操作進行中，請完成或取消後再拖入檔案"
+    },
+    {
+      "name": "shell_index_drop_closing",
+      "value": "應用程式正在關閉，請取消關閉後再拖入檔案"
+    },
+    {
+      "name": "shell_index_drop_cancelled",
+      "value": "已取消拖入檔案"
+    },
+    {
+      "name": "shell_index_drop_no_uri",
+      "value": "拖入的資料不包含可讀取的檔案 URI"
+    },
+    {
+      "name": "shell_index_close_platform_failed",
+      "value": "關閉平台服務失敗：{0}"
+    },
+    {
+      "name": "shell_index_cancel_drop_failed",
+      "value": "取消拖入失敗：{0}"
+    },
+    {
+      "name": "shell_index_restore_bindings_failed",
+      "value": "無法還原檔案目標記錄：{0}"
+    },
+    {
+      "name": "shell_index_platform_init_failed",
+      "value": "系統平台服務初始化失敗：{0}"
+    },
+    {
+      "name": "shell_index_init_detail",
+      "value": "PhotoCraft 初始化失敗：{0}"
+    },
+    {
+      "name": "shell_index_close_paste_failed",
+      "value": "關閉貼上面板失敗：{0}"
+    },
+    {
+      "name": "shell_index_read_paste_failed",
+      "value": "讀取或清理貼上內容失敗：{0}"
+    },
+    {
+      "name": "shell_index_platform_output_failed",
+      "value": "平台輸出處理失敗：{0}"
+    },
+    {
+      "name": "shell_index_suspend_ime_failed",
+      "value": "暫停輸入法失敗：{0}"
+    },
+    {
+      "name": "shell_index_error_code",
+      "value": "錯誤 {0}"
+    },
+    {
+      "name": "shell_index_read_request_failed",
+      "value": "讀取檔案請求失敗：{0}"
+    },
+    {
+      "name": "shell_index_drop_loading_failed",
+      "value": "無法取得拖入檔案，UDMF 狀態：{0}"
+    },
+    {
+      "name": "shell_index_drop_failed",
+      "value": "拖入失敗：{0}"
+    },
+    {
+      "name": "shell_index_drop_partial",
+      "value": "部分檔案未開啟：{0}"
+    },
+    {
+      "name": "shell_file_transaction_service_destroyed",
+      "value": "檔案交易服務已銷毀"
+    },
+    {
+      "name": "shell_file_transaction_close_canceled",
+      "value": "檔案交易關閉已取消"
+    },
+    {
+      "name": "shell_paste_canceled",
+      "value": "貼上已取消"
+    },
+    {
+      "name": "shell_folder_publication_cannot_delete_files",
+      "value": "目錄發佈服務不會刪除輸出檔案"
+    },
+    {
+      "name": "shell_folder_publication_cannot_delete_directories",
+      "value": "目錄發佈服務不會刪除輸出目錄"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "attributes": {
+    "bounds": "[0,0][2776,1775]"
+  },
+  "children": [
+    {
+      "attributes": {
+        "id": "",
+        "text": "",
+        "type": "root",
+        "focused": "true",
+        "bounds": "[344,255][2776,1775]",
+        "bundleName": "moe.kiwi.photocraft",
+        "visible": "true",
+        "enabled": "true"
+      },
+      "children": [
+        {
+          "attributes": {
+            "id": "enhanceAppLabel",
+            "text": "PhotoCraft",
+            "type": "Text",
+            "focused": "false",
+            "bounds": "[441,272][592,308]",
+            "visible": "true",
+            "enabled": "true"
+          },
+          "children": []
+        },
+        {
+          "attributes": {
+            "id": "photocraft-surface",
+            "text": "",
+            "type": "XComponent",
+            "focused": "false",
+            "bounds": "[344,325][2776,1775]",
+            "visible": "true",
+            "enabled": "true"
+          },
+          "children": []
+        },
+        {
+          "attributes": {
+            "id": "",
+            "text": "粘贴剪贴板内容",
+            "type": "Text",
+            "focused": "false",
+            "bounds": "[1440,970][1680,1010]",
+            "visible": "true",
+            "enabled": "true"
+          },
+          "children": []
+        },
+        {
+          "attributes": {
+            "id": "photocraft-paste-authorize",
+            "text": "粘贴",
+            "type": "PasteButton",
+            "focused": "false",
+            "bounds": "[1385,1048][1575,1130]",
+            "visible": "true",
+            "enabled": "true"
+          },
+          "children": []
+        },
+        {
+          "attributes": {
+            "id": "",
+            "text": "取消",
+            "type": "Button",
+            "focused": "false",
+            "bounds": "[1613,1051][1734,1127]",
+            "visible": "true",
+            "enabled": "true"
+          },
+          "children": []
+        },
+        {
+          "attributes": {
+            "id": "EnhanceCloseBtn",
+            "text": "",
+            "type": "Button",
+            "focused": "false",
+            "bounds": "[2685,264][2738,317]",
+            "visible": "true",
+            "enabled": "true"
+          },
+          "children": []
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,984 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "PhotoCraft 图像编辑器"
+    },
+    {
+      "name": "ability_desc",
+      "value": "适用于 HarmonyOS PC 的 PhotoCraft"
+    },
+    {
+      "name": "permission_pasteboard",
+      "value": "用于按您的粘贴操作读取剪贴板中的文字与图像"
+    },
+    {
+      "name": "shell_the_clipboard_contains_no_image_to_paste",
+      "value": "剪贴板中没有可粘贴的图片"
+    },
+    {
+      "name": "shell_the_clipboard_contains_no_text_to_paste",
+      "value": "剪贴板中没有可粘贴的文字"
+    },
+    {
+      "name": "shell_the_decoded_clipboard_image_exceeds_64_mib_or_has",
+      "value": "剪贴板图像解码尺寸超过 64 MiB 上限或尺寸无效"
+    },
+    {
+      "name": "shell_the_clipboard_image_file_is_empty_or_exceeds_64",
+      "value": "剪贴板图片文件为空或超过 64 MiB 上限"
+    },
+    {
+      "name": "shell_invalid_clipboard_temporary_file_path",
+      "value": "剪贴板临时文件路径无效"
+    },
+    {
+      "name": "shell_the_copied_image_is_outside_the_app_sandbox",
+      "value": "复制图像不在应用沙箱中"
+    },
+    {
+      "name": "shell_the_recent_file_record_is_invalid_or_too_large",
+      "value": "最近文件记录无效或过大，请重新打开文件"
+    },
+    {
+      "name": "shell_the_recent_file_records_are_invalid_or_too_numerous",
+      "value": "最近文件记录无效或过多，请重新打开文件"
+    },
+    {
+      "name": "shell_duplicate_recent_file_source_record",
+      "value": "最近文件来源记录重复"
+    },
+    {
+      "name": "shell_the_recent_file_source_record_is_invalid_open_the",
+      "value": "最近文件来源记录无效，请重新打开文件"
+    },
+    {
+      "name": "shell_a_folder_source_cannot_be_used_as_a_single",
+      "value": "文件夹来源记录不能冒充单文件来源"
+    },
+    {
+      "name": "shell_the_recent_file_source_record_is_empty",
+      "value": "最近文件来源记录为空"
+    },
+    {
+      "name": "shell_invalid_open_file_request",
+      "value": "打开文件请求无效"
+    },
+    {
+      "name": "shell_the_recent_file_request_is_missing_its_original_source",
+      "value": "最近文件请求缺少原来源"
+    },
+    {
+      "name": "shell_documents_with_notes",
+      "value": "包含备注的文档|.pcraft,.psd,.psb"
+    },
+    {
+      "name": "shell_photocraft_scripts",
+      "value": "PhotoCraft 脚本|.json,.jsonl,.txt"
+    },
+    {
+      "name": "shell_all_files",
+      "value": "所有文件|.*"
+    },
+    {
+      "name": "shell_photocraft_presets",
+      "value": "PhotoCraft 预设|.pcpresets,.json"
+    },
+    {
+      "name": "shell_all_supported_images_and_projects",
+      "value": "所有支持的图像与工程|.pcraft,.psd,.psb,.png,.apng,.jpg,.jpeg,.jpe,.jfif,.tif,.tiff,.webp,.gif,.bmp,.dib,.tga,.icb,.vda,.vst,.ico,.pnm,.pbm,.pgm,.ppm,.pam,.pfm,.qoi,.exr,.hdr,.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.pef,.orf,.rw2,.raf,.abr,.grd"
+    },
+    {
+      "name": "shell_common_images",
+      "value": "常用图像|.png,.apng,.jpg,.jpeg,.jpe,.jfif,.tif,.tiff,.webp,.gif,.bmp,.dib"
+    },
+    {
+      "name": "shell_other_images",
+      "value": "其他图像|.tga,.icb,.vda,.vst,.ico,.pnm,.pbm,.pgm,.ppm,.pam,.pfm,.qoi,.exr,.hdr"
+    },
+    {
+      "name": "shell_camera_raw_selected_formats",
+      "value": "相机 RAW（部分格式）|.dng,.cr2,.cr3,.nef,.nrw,.arw,.srf,.sr2,.pef,.orf,.rw2,.raf"
+    },
+    {
+      "name": "shell_the_file_source_record_is_unavailable_select_the_source",
+      "value": "文件来源记录不可用，请重新选择来源文件"
+    },
+    {
+      "name": "shell_permission_to_read_the_file_source_has_expired_select",
+      "value": "文件来源读取授权已失效，请重新选择来源文件"
+    },
+    {
+      "name": "shell_invalid_recent_file_source",
+      "value": "最近文件来源无效"
+    },
+    {
+      "name": "shell_the_save_request_is_missing_the_encoded_file_extension",
+      "value": "保存请求缺少已编码文件的扩展名"
+    },
+    {
+      "name": "shell_detail_file",
+      "value": "{0} 文件|.{1}"
+    },
+    {
+      "name": "shell_the_save_request_has_no_available_output_format",
+      "value": "保存请求没有可用输出格式"
+    },
+    {
+      "name": "shell_the_saved_file_extension_must_be_detail",
+      "value": "保存文件扩展名必须为 .{0}"
+    },
+    {
+      "name": "shell_invalid_recovery_record_size",
+      "value": "恢复记录大小异常"
+    },
+    {
+      "name": "shell_invalid_recovery_record_format",
+      "value": "恢复记录格式异常"
+    },
+    {
+      "name": "shell_the_recent_file_is_outside_the_app_document_storage",
+      "value": "最近文件不属于应用文档存储"
+    },
+    {
+      "name": "shell_the_recent_file_storage_contains_an_invalid_directory_or",
+      "value": "最近文件存储包含无效目录或链接"
+    },
+    {
+      "name": "shell_the_app_file_storage_directory_is_invalid_cannot_save",
+      "value": "应用文件存储目录异常，无法安全保存"
+    },
+    {
+      "name": "shell_invalid_app_file_storage_directory",
+      "value": "应用文件存储目录无效"
+    },
+    {
+      "name": "shell_too_many_recent_file_source_records_clear_the_history",
+      "value": "最近文件来源记录过多，请清理历史后重新打开"
+    },
+    {
+      "name": "shell_the_file_destination_record_was_not_fully_written",
+      "value": "文件目标记录未完整写入"
+    },
+    {
+      "name": "shell_invalid_file_name",
+      "value": "文件名无效"
+    },
+    {
+      "name": "shell_another_folder_selection_is_in_progress_complete_or_cancel",
+      "value": "另一个文件夹选择正在进行，请完成或取消后重试"
+    },
+    {
+      "name": "shell_this_dialog_does_not_support_folder_output",
+      "value": "此表单不支持目录输出"
+    },
+    {
+      "name": "shell_this_device_does_not_support_authorized_folder_export",
+      "value": "此设备不支持授权文件夹导出"
+    },
+    {
+      "name": "shell_select_one_output_folder",
+      "value": "请选择一个输出目录"
+    },
+    {
+      "name": "shell_too_many_folder_selection_records_select_again_or_clear",
+      "value": "目录选择记录过多，请重新选择或清理已完成任务"
+    },
+    {
+      "name": "shell_invalid_system_generated_folder_identifier",
+      "value": "系统随机目录标识无效"
+    },
+    {
+      "name": "shell_could_not_create_a_unique_folder_selection_record",
+      "value": "未能建立独有目录选择记录"
+    },
+    {
+      "name": "shell_could_not_authorize_the_selected_output_folder_error_detail",
+      "value": "无法授权所选输出目录（错误 {0}），请重新选择"
+    },
+    {
+      "name": "shell_could_not_select_the_output_folder_try_again",
+      "value": "无法选择输出目录，请重试"
+    },
+    {
+      "name": "shell_invalid_folder_selection_identifier_select_the_folder_again",
+      "value": "目录选择标识无效，请重新选择"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_select_the_folder_again",
+      "value": "目录选择记录异常，请重新选择"
+    },
+    {
+      "name": "shell_the_folder_selection_belongs_to_another_task_select_the",
+      "value": "目录选择不属于原任务，请重新选择"
+    },
+    {
+      "name": "shell_output_folder_permission_has_expired_select_the_folder_again",
+      "value": "输出目录授权已失效，请重新选择"
+    },
+    {
+      "name": "shell_the_selected_output_location_is_not_a_folder_select",
+      "value": "所选输出位置不是目录，请重新选择"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_path",
+      "value": "目录选择记录路径异常"
+    },
+    {
+      "name": "shell_the_folder_selection_record_exceeds_the_size_limit",
+      "value": "目录选择记录超过大小限制"
+    },
+    {
+      "name": "shell_the_folder_selection_record_was_not_fully_written",
+      "value": "目录选择记录未完整写入"
+    },
+    {
+      "name": "shell_the_import_directory_is_not_empty_recursive_cleanup_was",
+      "value": "导入目录仍有内容，拒绝递归清理"
+    },
+    {
+      "name": "shell_invalid_original_folder_source_record",
+      "value": "原文件夹来源记录无效"
+    },
+    {
+      "name": "shell_another_folder_import_is_in_progress",
+      "value": "另一个文件夹导入正在进行"
+    },
+    {
+      "name": "shell_invalid_folder_import_request",
+      "value": "文件夹导入请求无效"
+    },
+    {
+      "name": "shell_this_device_does_not_support_persistent_folder_import_permissions",
+      "value": "此设备不支持持久授权文件夹导入"
+    },
+    {
+      "name": "shell_select_only_one_folder_to_import",
+      "value": "文件夹导入只能选择一个目录"
+    },
+    {
+      "name": "shell_could_not_retain_permission_to_the_selected_folder",
+      "value": "未能持久授权所选文件夹"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_size_limit_import_stopped",
+      "value": "文件夹超过大小限制，已停止导入"
+    },
+    {
+      "name": "shell_folder_import_failed_check_the_permissions_or_folder_and",
+      "value": "文件夹导入失败，请检查权限或目录后重试（错误 {0}）"
+    },
+    {
+      "name": "shell_folder_import_failed_try_again",
+      "value": "文件夹导入失败，请重试"
+    },
+    {
+      "name": "shell_cleanup_of_the_imported_copy_is_incomplete_local_files",
+      "value": "；导入副本清理未完成，本地材料已保留"
+    },
+    {
+      "name": "shell_folder_copying_is_still_running_copy_cleanup_was_refused",
+      "value": "文件夹复制仍在运行，拒绝清理副本"
+    },
+    {
+      "name": "shell_the_imported_copy_belongs_to_another_request_cleanup_was",
+      "value": "导入副本不属于原请求，拒绝清理"
+    },
+    {
+      "name": "shell_an_imported_copy_ancestor_is_not_a_regular_directory",
+      "value": "导入副本祖先不是普通目录，拒绝清理"
+    },
+    {
+      "name": "shell_the_imported_copy_ownership_record_is_invalid_cleanup_was",
+      "value": "导入副本所属记录无效，拒绝清理"
+    },
+    {
+      "name": "shell_the_imported_copy_target_does_not_match_cleanup_was",
+      "value": "导入副本目标身份不一致，拒绝清理"
+    },
+    {
+      "name": "shell_the_imported_copy_root_or_manifest_is_outside_its",
+      "value": "导入副本的实际根或清单越界，拒绝清理"
+    },
+    {
+      "name": "shell_the_folder_import_storage_directory_is_invalid_links_will",
+      "value": "文件夹导入存储目录异常，拒绝跟随链接"
+    },
+    {
+      "name": "shell_the_folder_manifest_or_permission_record_exceeds_the_size",
+      "value": "文件夹清单或授权记录超过大小上限"
+    },
+    {
+      "name": "shell_the_folder_manifest_was_not_fully_written",
+      "value": "文件夹清单未完整写入"
+    },
+    {
+      "name": "shell_invalid_folder_input_request_identity",
+      "value": "文件夹输入请求身份无效"
+    },
+    {
+      "name": "shell_the_folder_input_queue_is_full_cancel_and_try",
+      "value": "文件夹输入队列超过上限，请取消后重试"
+    },
+    {
+      "name": "shell_unsupported_folder_input_request",
+      "value": "不支持的文件夹输入请求"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel",
+      "value": "另一个文件操作正在进行，请完成或取消后再选择文件夹"
+    },
+    {
+      "name": "shell_could_not_cancel_folder_copying_immediately_waiting_for_the",
+      "value": "无法立即取消文件夹复制，正在等待任务结束"
+    },
+    {
+      "name": "shell_invalid_folder_input_progress",
+      "value": "文件夹输入进度无效"
+    },
+    {
+      "name": "shell_folder_import_failed",
+      "value": "文件夹导入失败"
+    },
+    {
+      "name": "shell_the_folder_input_result_does_not_match_the_request",
+      "value": "文件夹输入结果身份不一致，未设置原表单"
+    },
+    {
+      "name": "shell_import_was_canceled_but_the_local_copy_could_not",
+      "value": "导入已取消，但本地副本未能清理；材料已保留，请稍后重试"
+    },
+    {
+      "name": "shell_the_local_imported_copy_could_not_be_removed_files",
+      "value": "本地导入副本未能清理，材料已保留"
+    },
+    {
+      "name": "shell_invalid_output_folder_request_identity",
+      "value": "输出目录请求身份无效"
+    },
+    {
+      "name": "shell_too_many_output_folder_requests_cancel_and_try_again",
+      "value": "输出目录请求过多，请取消后重试"
+    },
+    {
+      "name": "shell_invalid_output_folder_request_format",
+      "value": "输出目录请求格式无效"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel_91",
+      "value": "另一个文件操作正在进行，请完成或取消后重试"
+    },
+    {
+      "name": "shell_waiting_for_system_folder_selection_to_finish",
+      "value": "正在等待系统文件夹选择结束"
+    },
+    {
+      "name": "shell_the_output_folder_operation_is_incomplete_select_the_folder",
+      "value": "输出目录操作未完成，请重新选择后重试"
+    },
+    {
+      "name": "shell_invalid_output_folder_result_identity_select_the_folder_again",
+      "value": "输出目录结果身份无效，请重新选择"
+    },
+    {
+      "name": "shell_folder_selection_was_canceled_but_the_local_permission_record",
+      "value": "目录选择已取消，但本地授权记录仍保留，请重新选择后重试"
+    },
+    {
+      "name": "shell_the_folder_output_belongs_to_another_task_generate_the",
+      "value": "目录输出不属于原任务，请重新生成输出"
+    },
+    {
+      "name": "shell_folder_export_canceled",
+      "value": "目录导出已取消"
+    },
+    {
+      "name": "shell_invalid_system_generated_folder_name",
+      "value": "系统随机目录名称无效"
+    },
+    {
+      "name": "shell_could_not_create_a_new_output_folder_name",
+      "value": "未能创建全新的输出目录名称"
+    },
+    {
+      "name": "shell_the_output_folder_name_already_exists_overwriting_was_refused",
+      "value": "输出目录名称已存在，拒绝覆盖"
+    },
+    {
+      "name": "shell_the_output_copy_location_needs_manual_inspection",
+      "value": "输出副本位置需要人工检查"
+    },
+    {
+      "name": "shell_select_the_output_folder_in_the_original_dialog_first",
+      "value": "请先在原表单选择输出目录"
+    },
+    {
+      "name": "shell_the_output_folder_permission_service_is_not_ready",
+      "value": "输出目录授权服务尚未就绪"
+    },
+    {
+      "name": "shell_could_not_authorize_the_selected_output_folder",
+      "value": "未能授权所选输出目录"
+    },
+    {
+      "name": "shell_the_selected_output_location_is_not_a_folder",
+      "value": "所选输出位置不是目录"
+    },
+    {
+      "name": "shell_too_many_retained_folder_output_tasks_to_inspect_resolve",
+      "value": "保留的目录输出任务超过检查上限，请先处理已保留副本"
+    },
+    {
+      "name": "shell_the_folder_output_storage_contains_an_invalid_task_it",
+      "value": "目录输出存储包含异常任务，已保留原样"
+    },
+    {
+      "name": "shell_an_incomplete_folder_output_record_was_found_the_local",
+      "value": "发现未完成的目录输出记录；本地副本已保留，请检查输出目录后重新导出"
+    },
+    {
+      "name": "shell_invalid_folder_output_record",
+      "value": "目录输出记录无效"
+    },
+    {
+      "name": "shell_a_local_copy_of_a_completed_folder_export_was",
+      "value": "发现已完成目录导出的本地副本，等待原任务确认"
+    },
+    {
+      "name": "shell_an_incomplete_folder_output_was_found_local_output_files",
+      "value": "发现未完成的目录输出；本地输出材料已保留，请检查输出目录后重新导出"
+    },
+    {
+      "name": "shell_invalid_folder_output_task_ownership_record",
+      "value": "目录输出任务所属记录无效"
+    },
+    {
+      "name": "shell_the_folder_output_path_is_invalid_links_will_not",
+      "value": "目录输出路径异常，拒绝跟随链接"
+    },
+    {
+      "name": "shell_the_folder_output_record_is_not_a_valid_regular",
+      "value": "目录输出记录不是有效普通文件"
+    },
+    {
+      "name": "shell_the_folder_output_record_contains_links_or_special_files",
+      "value": "目录输出记录包含链接或特殊文件"
+    },
+    {
+      "name": "shell_the_folder_output_record_was_not_fully_written",
+      "value": "目录输出记录未完整写入"
+    },
+    {
+      "name": "shell_invalid_folder_output_request_identity",
+      "value": "目录输出请求身份无效"
+    },
+    {
+      "name": "shell_the_folder_output_queue_is_full_cancel_and_try",
+      "value": "目录输出队列超过上限，请取消后重试"
+    },
+    {
+      "name": "shell_invalid_folder_output_request",
+      "value": "目录输出请求无效"
+    },
+    {
+      "name": "shell_another_file_operation_is_in_progress_complete_or_cancel_122",
+      "value": "另一个文件操作正在进行，请完成或取消后再导出"
+    },
+    {
+      "name": "shell_waiting_for_folder_output_to_finish_keep_the_system",
+      "value": "正在等待目录输出结束，请勿关闭系统文件窗口"
+    },
+    {
+      "name": "shell_the_folder_export_result_could_not_be_confirmed_local",
+      "value": "目录导出结果未能确认；本地输出仍保留，请检查新输出目录后重新导出"
+    },
+    {
+      "name": "shell_invalid_folder_output_receipt_local_output_has_been_retained",
+      "value": "目录输出回执无效；本地输出已保留，请检查输出目录后重试"
+    },
+    {
+      "name": "shell_invalid_folder_output_progress",
+      "value": "目录输出进度无效"
+    },
+    {
+      "name": "shell_invalid_folder_export_request_identity",
+      "value": "目录导出请求身份无效"
+    },
+    {
+      "name": "shell_invalid_folder_export_sandbox_root",
+      "value": "目录导出沙箱根目录无效"
+    },
+    {
+      "name": "shell_the_folder_export_does_not_belong_to_a_unique",
+      "value": "目录导出不属于本应用独有输出任务"
+    },
+    {
+      "name": "shell_the_folder_export_source_must_be_the_complete_output",
+      "value": "目录导出源必须是任务的完整输出树"
+    },
+    {
+      "name": "shell_another_folder_export_is_in_progress_wait_or_cancel",
+      "value": "另一个目录导出正在进行，请等待或取消后重试"
+    },
+    {
+      "name": "shell_the_folder_export_request_is_invalid_or_already_processed",
+      "value": "目录导出请求无效或已经处理，请使用新请求重试"
+    },
+    {
+      "name": "shell_too_many_folder_export_requests_in_this_session_reopen",
+      "value": "本次会话的目录导出请求过多，请重新打开应用"
+    },
+    {
+      "name": "shell_the_folder_export_contains_no_output_files",
+      "value": "目录导出没有输出文件"
+    },
+    {
+      "name": "shell_could_not_generate_a_new_safe_output_folder_name",
+      "value": "无法生成全新的安全输出目录名称"
+    },
+    {
+      "name": "shell_could_not_process_folder_export_progress",
+      "value": "目录导出进度处理失败"
+    },
+    {
+      "name": "shell_folder_export_is_incomplete_and_the_recovery_record_could",
+      "value": "目录导出未完成，恢复记录未能更新；本地完整输出仍保留，请检查输出目录后重试或另选目录"
+    },
+    {
+      "name": "shell_folder_copying_finished_but_export_completion_could_not_be",
+      "value": "目录复制已结束，但本次导出未能确认完成；完整输出仍保留，请检查新输出目录后重试"
+    },
+    {
+      "name": "shell_folder_export_is_incomplete_and_partial_results_may_remain",
+      "value": "目录导出未完成，可能保留部分结果；完整输出仍保留，请检查新输出目录后重试或另选目录"
+    },
+    {
+      "name": "shell_folder_export_was_canceled_complete_output_has_been_retained",
+      "value": "目录导出已取消，完整输出仍保留，可重新导出"
+    },
+    {
+      "name": "shell_folder_export_did_not_start_complete_output_has_been",
+      "value": "目录导出未开始，完整输出仍保留；请检查权限或输出文件后重试"
+    },
+    {
+      "name": "shell_invalid_original_folder_copy_identity",
+      "value": "原文件夹副本身份无效"
+    },
+    {
+      "name": "shell_invalid_original_folder_request_identity",
+      "value": "原文件夹请求身份无效"
+    },
+    {
+      "name": "shell_the_original_folder_copy_contains_links_or_invalid_entries",
+      "value": "原文件夹副本包含链接或无效节点"
+    },
+    {
+      "name": "shell_the_original_folder_source_ownership_record_does_not_match",
+      "value": "原文件夹来源所属记录不匹配"
+    },
+    {
+      "name": "shell_the_original_folder_copy_does_not_match_the_source",
+      "value": "原文件夹副本与来源清单不匹配"
+    },
+    {
+      "name": "shell_could_not_read_the_original_folder_again_authorize_the",
+      "value": "无法重新读取原文件夹，请重新授权来源"
+    },
+    {
+      "name": "shell_the_source_file_in_the_original_folder_was_deleted",
+      "value": "原文件夹中的来源文件已删除或更名，请重新选择来源"
+    },
+    {
+      "name": "shell_the_newly_read_source_file_is_invalid",
+      "value": "重新读取的来源文件无效"
+    },
+    {
+      "name": "shell_the_folder_source_record_is_invalid_or_too_large",
+      "value": "文件夹来源记录无效或过大"
+    },
+    {
+      "name": "shell_invalid_output_task_or_folder_selection_identifier",
+      "value": "输出任务或目录选择标识无效"
+    },
+    {
+      "name": "shell_could_not_prepare_the_output_folder_error_detail_select",
+      "value": "无法准备输出目录（错误 {0}），请重新选择后重试"
+    },
+    {
+      "name": "shell_invalid_folder_selection_record_select_the_folder_again_and",
+      "value": "目录选择记录异常，请重新选择后重试"
+    },
+    {
+      "name": "shell_could_not_prepare_the_output_folder_select_it_again",
+      "value": "无法准备输出目录，请重新选择后重试"
+    },
+    {
+      "name": "shell_could_not_request_editor_closure_detail",
+      "value": "无法请求关闭编辑器：{0}"
+    },
+    {
+      "name": "shell_system_printing_detail",
+      "value": "系统打印：{0}"
+    },
+    {
+      "name": "shell_could_not_monitor_window_state_detail",
+      "value": "窗口状态监听失败：{0}"
+    },
+    {
+      "name": "shell_invalid_platform_request_number",
+      "value": "平台请求编号无效"
+    },
+    {
+      "name": "shell_could_not_get_the_editor_screen_position_input_method",
+      "value": "无法取得编辑区域的屏幕位置，输入法候选框暂不可定位"
+    },
+    {
+      "name": "shell_could_not_handle_the_close_request_detail",
+      "value": "处理关闭请求失败：{0}"
+    },
+    {
+      "name": "shell_could_not_confirm_system_print_status_check_the_system",
+      "value": "无法确认系统打印状态，请检查系统打印界面"
+    },
+    {
+      "name": "shell_a_folder_operation_is_in_progress_complete_or_cancel",
+      "value": "文件夹操作正在进行，请完成或取消后再粘贴"
+    },
+    {
+      "name": "shell_the_window_service_is_not_ready",
+      "value": "窗口服务尚未就绪"
+    },
+    {
+      "name": "shell_unsupported_platform_request_detail",
+      "value": "不支持的平台请求：{0}"
+    },
+    {
+      "name": "shell_clipboard_text_exceeds_the_1_mib_platform_input_limit",
+      "value": "剪贴板文字超过 1 MiB 平台输入上限"
+    },
+    {
+      "name": "shell_the_editor_input_queue_is_busy_try_pasting_again",
+      "value": "编辑器输入队列繁忙，请重试粘贴"
+    },
+    {
+      "name": "shell_error_detail",
+      "value": "错误 {0}"
+    },
+    {
+      "name": "shell_system_operation_failed_detail",
+      "value": "系统操作失败：{0}"
+    },
+    {
+      "name": "shell_could_not_remove_the_clipboard_temporary_image_detail",
+      "value": "清理剪贴板临时图像失败：{0}"
+    },
+    {
+      "name": "shell_could_not_wait_for_file_operations_to_finish_detail",
+      "value": "等待文件操作结束失败：{0}"
+    },
+    {
+      "name": "shell_could_not_close_the_input_method_detail",
+      "value": "关闭输入法失败：{0}"
+    },
+    {
+      "name": "shell_could_not_close_photocraft_detail",
+      "value": "无法关闭 PhotoCraft：{0}"
+    },
+    {
+      "name": "shell_invalid_folder_input_request_format",
+      "value": "文件夹输入请求格式无效"
+    },
+    {
+      "name": "shell_could_not_handle_the_folder_operation_detail",
+      "value": "处理文件夹操作失败：{0}"
+    },
+    {
+      "name": "shell_invalid_folder_publication_request_identity",
+      "value": "目录发布请求身份无效"
+    },
+    {
+      "name": "shell_the_local_folder_selection_record_could_not_be_removed",
+      "value": "本地目录选择记录未能清理；已保留，不影响用户输出文件"
+    },
+    {
+      "name": "shell_too_many_print_jobs_wait_for_existing_jobs_to",
+      "value": "打印任务过多，请等待现有任务完成"
+    },
+    {
+      "name": "shell_system_printing_is_unavailable_on_this_device",
+      "value": "此设备未提供系统打印服务"
+    },
+    {
+      "name": "shell_the_print_file_must_be_a_pdf_in_the",
+      "value": "打印文件必须是应用沙箱内的 PDF"
+    },
+    {
+      "name": "shell_the_print_pdf_file_is_unavailable",
+      "value": "打印 PDF 文件不可用"
+    },
+    {
+      "name": "shell_system_print_request_failed",
+      "value": "系统打印调用失败"
+    },
+    {
+      "name": "shell_the_save_recovery_record_was_not_fully_written",
+      "value": "保存恢复记录未完整写入"
+    },
+    {
+      "name": "shell_an_incomplete_recovery_record_from_the_previous_save_was",
+      "value": "发现上次保存未正常结束的恢复记录，已有恢复材料保持原样。"
+    },
+    {
+      "name": "shell_check_the_original_file_then_save_the_current_edits",
+      "value": "请先核对原文件，再将当前编辑另存；不会自动覆盖外部文件。"
+    },
+    {
+      "name": "shell_a_save_record_for_a_written_file_still_needs",
+      "value": "发现已写入文件但尚未清理的保存记录，恢复材料保持原样。请核对目标文件。"
+    },
+    {
+      "name": "shell_save_failed_the_original_file_was_restored_try_saving",
+      "value": "保存失败，原文件已恢复。请重试保存或另存。原因：{0}"
+    },
+    {
+      "name": "shell_could_not_retain_the_new_file_detail",
+      "value": "；保留新文件时发生错误：{0}"
+    },
+    {
+      "name": "shell_save_failed_and_the_original_file_could_not_be",
+      "value": "保存失败，原文件恢复也未完成；旧备份和新文件已保留。"
+    },
+    {
+      "name": "shell_use_save_as_to_save_the_current_edits_then",
+      "value": "请使用另存保存当前编辑，检查目标文件后再继续。保存原因：{0}；恢复原因：{1}"
+    },
+    {
+      "name": "shell_could_not_save_safely_the_original_file_is_unchanged",
+      "value": "无法安全保存，原文件未被改写。请选择可读写的位置另存。"
+    },
+    {
+      "name": "shell_reason_detail",
+      "value": "原因：{0}"
+    },
+    {
+      "name": "shell_cleanup_after_saving_could_not_be_confirmed_check_the",
+      "value": " 保存后的清理未能确认完成，请核对原文件。"
+    },
+    {
+      "name": "shell_the_file_was_written_but_cleanup_after_saving_could",
+      "value": "文件已写入，但保存后的清理未能确认完成。请检查目标文件。原因：{0}"
+    },
+    {
+      "name": "shell_folder_import_canceled",
+      "value": "文件夹导入已取消"
+    },
+    {
+      "name": "shell_folder_import_limits_must_be_1_500_files_and",
+      "value": "文件夹导入限制必须为 1–500 个文件，大小不超过 1 GiB"
+    },
+    {
+      "name": "shell_the_folder_contains_an_unsafe_relative_path",
+      "value": "文件夹包含不安全的相对路径"
+    },
+    {
+      "name": "shell_the_import_root_must_be_a_unique_sandbox_directory",
+      "value": "导入根目录必须是独有沙箱目录"
+    },
+    {
+      "name": "shell_the_sandbox_root_contains_an_unsafe_path",
+      "value": "沙箱根目录包含不安全的路径"
+    },
+    {
+      "name": "shell_the_folder_copy_container_is_not_a_regular_directory",
+      "value": "文件夹复制容器不是普通目录"
+    },
+    {
+      "name": "shell_the_folder_provider_copy_hierarchy_does_not_match_a",
+      "value": "文件夹提供方的复制层级不符合已支持的目录布局"
+    },
+    {
+      "name": "shell_the_folder_copy_is_not_a_unique_regular_source",
+      "value": "文件夹复制结果不是唯一普通源目录，拒绝跟随链接"
+    },
+    {
+      "name": "shell_the_import_directory_is_not_a_regular_directory_links",
+      "value": "导入目录不是普通目录，拒绝跟随链接"
+    },
+    {
+      "name": "shell_the_folder_manifest_contains_a_path_outside_its_directory",
+      "value": "文件夹清单包含越界路径"
+    },
+    {
+      "name": "shell_the_folder_manifest_contains_duplicate_paths",
+      "value": "文件夹清单包含重复路径"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_limit_of_4096_entries",
+      "value": "文件夹目录项超过 4096 项上限"
+    },
+    {
+      "name": "shell_the_folder_contains_links_or_special_files_and_was",
+      "value": "文件夹包含链接或特殊文件，未导入"
+    },
+    {
+      "name": "shell_invalid_folder_entry_size",
+      "value": "文件夹条目大小无效"
+    },
+    {
+      "name": "shell_the_folder_exceeds_the_file_count_or_size_limit",
+      "value": "文件夹超出文件数量或大小限制"
+    },
+    {
+      "name": "shell_could_not_safely_remove_an_invalid_directory_entry",
+      "value": "无法安全清理异常目录项"
+    },
+    {
+      "name": "shell_the_window_service_is_closed",
+      "value": "窗口服务已关闭"
+    },
+    {
+      "name": "shell_the_fullscreen_request_is_missing_its_state",
+      "value": "全屏请求缺少状态"
+    },
+    {
+      "name": "shell_the_maximize_request_is_missing_its_state",
+      "value": "最大化请求缺少状态"
+    },
+    {
+      "name": "shell_unsupported_window_request_detail",
+      "value": "不支持的窗口请求：{0}"
+    },
+    {
+      "name": "shell_could_not_read_window_state_detail",
+      "value": "无法读取窗口状态：{0}"
+    },
+    {
+      "name": "shell_index_paste_reading",
+      "value": "正在读取剪贴板…"
+    },
+    {
+      "name": "shell_index_paste_confirm",
+      "value": "系统需要你确认本次粘贴"
+    },
+    {
+      "name": "shell_index_paste_denied",
+      "value": "系统未能授权本次粘贴，请重试"
+    },
+    {
+      "name": "shell_index_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "shell_index_init_failed",
+      "value": "PhotoCraft 初始化失败"
+    },
+    {
+      "name": "shell_index_request_id_invalid",
+      "value": "文件请求编号无效"
+    },
+    {
+      "name": "shell_index_file_service_not_ready",
+      "value": "文件服务尚未就绪"
+    },
+    {
+      "name": "shell_index_encode_failed",
+      "value": "无法编码所选保存格式"
+    },
+    {
+      "name": "shell_index_request_unsupported",
+      "value": "不支持的文件请求"
+    },
+    {
+      "name": "shell_index_drop_busy",
+      "value": "文件操作进行中，请完成或取消后再拖入文件"
+    },
+    {
+      "name": "shell_index_drop_closing",
+      "value": "应用正在关闭，请取消关闭后再拖入文件"
+    },
+    {
+      "name": "shell_index_drop_cancelled",
+      "value": "已取消拖入文件"
+    },
+    {
+      "name": "shell_index_drop_no_uri",
+      "value": "拖入的数据不包含可读取的文件 URI"
+    },
+    {
+      "name": "shell_index_close_platform_failed",
+      "value": "关闭平台服务失败：{0}"
+    },
+    {
+      "name": "shell_index_cancel_drop_failed",
+      "value": "取消拖入失败：{0}"
+    },
+    {
+      "name": "shell_index_restore_bindings_failed",
+      "value": "无法恢复文件目标记录：{0}"
+    },
+    {
+      "name": "shell_index_platform_init_failed",
+      "value": "系统平台服务初始化失败：{0}"
+    },
+    {
+      "name": "shell_index_init_detail",
+      "value": "PhotoCraft 初始化失败：{0}"
+    },
+    {
+      "name": "shell_index_close_paste_failed",
+      "value": "关闭粘贴面板失败：{0}"
+    },
+    {
+      "name": "shell_index_read_paste_failed",
+      "value": "读取或清理粘贴内容失败：{0}"
+    },
+    {
+      "name": "shell_index_platform_output_failed",
+      "value": "平台输出处理失败：{0}"
+    },
+    {
+      "name": "shell_index_suspend_ime_failed",
+      "value": "暂停输入法失败：{0}"
+    },
+    {
+      "name": "shell_index_error_code",
+      "value": "错误 {0}"
+    },
+    {
+      "name": "shell_index_read_request_failed",
+      "value": "读取文件请求失败：{0}"
+    },
+    {
+      "name": "shell_index_drop_loading_failed",
+      "value": "无法获取拖入文件，UDMF 状态：{0}"
+    },
+    {
+      "name": "shell_index_drop_failed",
+      "value": "拖入失败：{0}"
+    },
+    {
+      "name": "shell_index_drop_partial",
+      "value": "部分文件未打开：{0}"
+    },
+    {
+      "name": "shell_file_transaction_service_destroyed",
+      "value": "文件事务服务已销毁"
+    },
+    {
+      "name": "shell_file_transaction_close_canceled",
+      "value": "文件事务关闭已取消"
+    },
+    {
+      "name": "shell_paste_canceled",
+      "value": "粘贴已取消"
+    },
+    {
+      "name": "shell_folder_publication_cannot_delete_files",
+      "value": "目录发布桥不删除输出文件"
+    },
+    {
+      "name": "shell_folder_publication_cannot_delete_directories",
+      "value": "目录发布桥不删除输出目录"
+    }
+  ]
+}

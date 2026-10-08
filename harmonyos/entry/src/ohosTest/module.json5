@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "entry_test",
+    "type": "feature",
+    "description": "PhotoCraft physical-device regression tests",
+    "deviceTypes": ["2in1", "tablet", "phone"],
+    "deliveryWithInstall": true,
+    "installationFree": false
+  }
+}
